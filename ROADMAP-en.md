@@ -1,4 +1,3 @@
-markdown
 # 🐕 Dog Bark Detector - Development Roadmap
 
 **Version:** 4.0  
