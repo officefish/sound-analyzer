@@ -76,11 +76,11 @@ class LapHistoryPluginClass implements IPlugin {
     }
   }
   
-  onActivate(context: IPluginContext): void {
+  onActivate(): void {
     console.log('📊 Lap History Plugin activated');
   }
   
-  onDeactivate(context: IPluginContext): void {
+  onDeactivate(): void {
     console.log('📊 Lap History Plugin deactivated');
   }
   

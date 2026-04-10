@@ -149,12 +149,12 @@ class RecorderPluginClass implements IPlugin {
     }
   }
   
-  onActivate(context: IPluginContext): void {
+  onActivate(): void {
     console.log('🎙️ Recorder Plugin activated');
     this.resetState();
   }
   
-  onDeactivate(context: IPluginContext): void {
+  onDeactivate(): void {
     console.log('🎙️ Recorder Plugin deactivated');
     if (this.isRecordingFlag) {
       this.stopRecording();

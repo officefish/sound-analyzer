@@ -75,56 +75,45 @@ export const usePluginsStore = create<PluginsState>()(
         const plugin = get().plugins.find(p => p.id === pluginId);
         if (!plugin || plugin.enabled) return;
         
-        // ✅ Исправлено: проверяем наличие context перед вызовом
+        // ✅ context может быть undefined, это ок
         if (plugin.onActivate) {
-          if (context) {
             plugin.onActivate(context);
-          } else {
-            // Если контекст не передан, вызываем без аргументов или с пустым объектом
-            // В зависимости от того, требует ли плагин контекст
-            plugin.onActivate({} as IPluginContext);
-          }
         }
         
         set((state) => ({
-          plugins: state.plugins.map(p =>
+            plugins: state.plugins.map(p =>
             p.id === pluginId ? { ...p, enabled: true } : p
-          ),
-          // ✅ Исправлено: проверяем наличие context перед добавлением в Map
-          activePluginContexts: context 
+            ),
+            activePluginContexts: context 
             ? new Map(state.activePluginContexts).set(pluginId, context)
             : new Map(state.activePluginContexts),
         }));
         
         console.log(`🔌 Plugin activated: ${pluginId}`);
-      },
-      
-      deactivatePlugin: (pluginId) => {
+        },
+
+        deactivatePlugin: (pluginId) => {
         const plugin = get().plugins.find(p => p.id === pluginId);
         if (!plugin || !plugin.enabled) return;
         
         if (plugin.onDeactivate) {
-          const context = get().activePluginContexts.get(pluginId);
-          if (context) {
+            const context = get().activePluginContexts.get(pluginId);
             plugin.onDeactivate(context);
-          } else {
-            plugin.onDeactivate({} as IPluginContext);
-          }
         }
         
         set((state) => {
-          const newContexts = new Map(state.activePluginContexts);
-          newContexts.delete(pluginId);
-          return {
+            const newContexts = new Map(state.activePluginContexts);
+            newContexts.delete(pluginId);
+            return {
             plugins: state.plugins.map(p =>
-              p.id === pluginId ? { ...p, enabled: false } : p
+                p.id === pluginId ? { ...p, enabled: false } : p
             ),
             activePluginContexts: newContexts,
-          };
+            };
         });
         
         console.log(`🔌 Plugin deactivated: ${pluginId}`);
-      },
+       },
       
       togglePlugin: (pluginId, context) => {
         const plugin = get().plugins.find(p => p.id === pluginId);

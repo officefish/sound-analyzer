@@ -114,11 +114,11 @@ class SoundEffectPluginClass implements IPlugin {
     this.playSoundInternal(frequency, duration, 1);
   }
   
-  onActivate(context: IPluginContext): void {
+  onActivate(): void {
     console.log('🔊 Sound Effects Plugin activated');
   }
   
-  onDeactivate(context: IPluginContext): void {
+  onDeactivate(): void {
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;

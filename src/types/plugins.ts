@@ -4,6 +4,7 @@ import { ModuleType } from './modules';
 export type PluginHandler = (...args: any[]) => any;
 
 // Базовый интерфейс плагина (универсальный)
+
 export interface IPlugin {
   id: string;
   name: string;
@@ -13,27 +14,18 @@ export interface IPlugin {
   moduleId: ModuleType;
   enabled: boolean;
   
-  // Жизненный цикл
-  onActivate?: (context: IPluginContext) => void;
-  onDeactivate?: (context: IPluginContext) => void;
-  
-  // События модуля (обязательное поле, но опциональное)
+  // Все методы принимают опциональный context
+  onActivate?: (context?: IPluginContext) => void;
+  onDeactivate?: (context?: IPluginContext) => void;
   onModuleEvent?: (event: string, data: any, context?: IPluginContext) => void;
-  
-  // Универсальный метод execute
   execute: (action: string, data?: any, context?: IPluginContext) => any;
   
-  // Список доступных действий (для UI)
   availableActions?: string[];
-  
-  // UI компонент (опционально)
   UIComponent?: React.ComponentType<{ 
-    context: any; 
+    context?: any; 
     onAction: (action: string, data?: any) => void;
     isActive: boolean;
   }>;
-  
-  // Настройки
   settings?: Record<string, any>;
   settingsSchema?: ISettingField[];
 }

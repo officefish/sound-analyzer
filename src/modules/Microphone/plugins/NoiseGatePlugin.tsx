@@ -61,12 +61,12 @@ class NoiseGatePluginClass implements IPlugin {
     }
   }
   
-  onActivate(context: IPluginContext): void {
+  onActivate(): void {
     console.log('🔇 Noise Gate Plugin activated');
     this.resetState();
   }
   
-  onDeactivate(context: IPluginContext): void {
+  onDeactivate(): void {
     console.log('🔇 Noise Gate Plugin deactivated');
     this.resetState();
   }
