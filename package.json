@@ -1,21 +1,42 @@
 {
-  "name": "stopwatch-ts",
+  "name": "stopwatch-react-tailwind",
   "version": "1.0.0",
-  "description": "Секундомер на Electron + TypeScript",
-  "main": "dist/main.js",
+  "description": "Секундомер на Electron + React + TypeScript + TailwindCSS",
+  "main": "electron/main.js",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "npm run build && electron .",
-    "build:installer": "npm run build && electron-builder",
-    "dev": "tsc --watch & electron ."
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:start\"",
+    "electron:start": "cross-env NODE_ENV=development electron .",
+    "electron:build": "npm run build && electron-builder",
+    "build:installer": "npm run build && electron-builder"
   },
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
-    "typescript": "^5.3.0"
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.10",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^5.0.12"
   },
   "build": {
     "appId": "com.yourname.stopwatch",
@@ -25,7 +46,7 @@
     },
     "files": [
       "dist/**/*",
-      "public/**/*"
+      "electron/**/*"
     ],
     "win": {
       "target": "nsis",

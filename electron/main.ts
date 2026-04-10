@@ -1,26 +1,31 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
 
-// Отключаем меню по умолчанию
 Menu.setApplicationMenu(null);
 
 let mainWindow: BrowserWindow | null = null;
 
+const isDev = process.env.NODE_ENV === 'development';
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 550,
+    width: 450,
+    height: 620,
     resizable: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
       contextIsolation: true,
-      nodeIntegration: false
     },
     icon: path.join(__dirname, '../public/icon.ico'),
-    show: false
+    show: false,
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../public/index.html'));
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
