@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useModulePlugins } from '../../hooks/useModulePlugins';
-import { IPluginContext } from '../../types/plugins';
+//import { IPluginContext } from '../../types/plugins';
 
 interface MicrophoneState {
   isRecording: boolean;
@@ -12,19 +12,15 @@ interface MicrophoneState {
   recordingDuration: number;
 }
 
-interface MicrophoneProps {
-  onContextReady?: (context: IPluginContext) => void;
-}
-
-const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
+const Microphone: React.FC = () => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
+  const isInitializedRef = useRef(false);
   
-  // Используем универсальный хук
   const {
     state,
     setState,
@@ -42,28 +38,6 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
       audioDevices: [],
       selectedDeviceId: '',
       recordingDuration: 0,
-    }),
-    getContext: (state, setState) => ({
-      moduleId: 'microphone',
-      moduleState: state,
-      dispatch: (action, payload) => {
-        switch (action) {
-          case 'startRecording': startRecording(); break;
-          case 'stopRecording': stopRecording(); break;
-        }
-      },
-      getData: () => state,
-      setData: (data) => {
-        if (data.processedVolume !== undefined) setState({ processedVolume: data.processedVolume });
-      },
-      getStream: () => mediaStreamRef.current,
-      getVolume: () => state.processedVolume,
-      isRecording: state.isRecording,
-      rawVolume: state.rawVolume,
-      processedVolume: state.processedVolume,
-      recordingDuration: state.recordingDuration,
-      devices: state.audioDevices,
-      onContextReady,
     }),
   });
   
@@ -85,6 +59,8 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
   }, [selectedDeviceId, setState]);
   
   const startRecording = useCallback(async () => {
+    if (isRecording) return;
+    
     try {
       setState({ error: null });
       
@@ -107,16 +83,17 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
       await audioContextRef.current.resume();
       setState({ isRecording: true });
       
-      let duration = 0;
       durationIntervalRef.current = window.setInterval(() => {
-        duration++;
-        setState({ recordingDuration: duration });
+        setState((prev: MicrophoneState) => ({
+          ...prev,
+          recordingDuration: prev.recordingDuration + 1
+        }));
       }, 1000);
       
       const dataArray = new Uint8Array(analyserNodeRef.current.frequencyBinCount);
       
       const updateVolume = () => {
-        if (!analyserNodeRef.current || !state.isRecording) return;
+        if (!analyserNodeRef.current || !isRecording) return;
         
         analyserNodeRef.current.getByteFrequencyData(dataArray);
         let average = dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length;
@@ -143,7 +120,7 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
       console.error('Ошибка доступа к микрофону:', err);
       setState({ error: 'Не удалось получить доступ к микрофону. Проверьте разрешения.' });
     }
-  }, [selectedDeviceId, state.isRecording, emitEvent, executeOnPlugins, setState]);
+  }, [isRecording, selectedDeviceId, emitEvent, executeOnPlugins, setState]);
   
   const stopRecording = useCallback(() => {
     if (animationFrameRef.current) {
@@ -187,16 +164,38 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
   }, [emitEvent, recordingDuration, setState]);
   
   useEffect(() => {
-    getAudioDevices();
+    if (!isInitializedRef.current) {
+      isInitializedRef.current = true;
+      getAudioDevices();
+    }
+    
     return () => {
-      stopRecording();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+      }
+      if (analyserNodeRef.current) {
+        analyserNodeRef.current.disconnect();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [getAudioDevices, stopRecording]);
+  }, [getAudioDevices]);
   
   useEffect(() => {
-    if (isRecording) {
+    if (isRecording && selectedDeviceId) {
       stopRecording();
-      setTimeout(() => startRecording(), 100);
+      const timer = setTimeout(() => startRecording(), 100);
+      return () => clearTimeout(timer);
     }
   }, [selectedDeviceId]);
   
@@ -214,13 +213,12 @@ const Microphone: React.FC<MicrophoneProps> = ({ onContextReady }) => {
   
   const showNoiseGateEffect = processedVolume !== rawVolume;
   
-  // ✅ Создаём упрощённый контекст для виджетов
-  const widgetContext = {
+  const widgetContext = useMemo(() => ({
     isRecording,
     rawVolume,
     processedVolume,
     duration: recordingDuration,
-  };
+  }), [isRecording, rawVolume, processedVolume, recordingDuration]);
   
   return (
     <div className="p-6">

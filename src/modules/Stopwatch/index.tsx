@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useModulePlugins } from '../../hooks/useModulePlugins';
-import { IPluginContext } from '../../types/plugins';
 
 interface Lap {
   id: number;
@@ -14,16 +13,12 @@ interface StopwatchState {
   laps: Lap[];
 }
 
-interface StopwatchProps {
-  onContextReady?: (context: IPluginContext) => void;
-}
-
-const Stopwatch: React.FC<StopwatchProps> = ({ onContextReady }) => {
+const Stopwatch: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const lapCounterRef = useRef<number>(0);
+  const isInitializedRef = useRef(false);
   
-  // Используем универсальный хук
   const {
     state,
     setState,
@@ -31,34 +26,12 @@ const Stopwatch: React.FC<StopwatchProps> = ({ onContextReady }) => {
     widgets,
     emitEvent,
     executeOnPlugins,
-    pluginContext, // ✅ Получаем полный контекст
   } = useModulePlugins<StopwatchState>({
     moduleId: 'stopwatch',
     getInitialState: () => ({
       elapsedTime: 0,
       isRunning: false,
       laps: [],
-    }),
-    getContext: (state, setState) => ({
-      moduleId: 'stopwatch',
-      moduleState: state,
-      dispatch: (action, payload) => {
-        switch (action) {
-          case 'addLap': addLap(); break;
-          case 'reset': reset(); break;
-          case 'pause': pause(); break;
-          case 'start': start(); break;
-        }
-      },
-      getData: () => state,
-      setData: (data) => {
-        if (data.elapsedTime !== undefined) setState({ elapsedTime: data.elapsedTime });
-        if (data.laps !== undefined) setState({ laps: data.laps });
-      },
-      elapsedTime: state.elapsedTime,
-      isRunning: state.isRunning,
-      laps: state.laps,
-      onContextReady,
     }),
   });
   
@@ -119,6 +92,7 @@ const Stopwatch: React.FC<StopwatchProps> = ({ onContextReady }) => {
     executeOnPlugins('onLap', { lap: newLap });
   }, [isRunning, elapsedTime, formatTime, laps, setState, emitEvent, executeOnPlugins]);
   
+  // Очистка таймера при размонтировании
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -127,6 +101,7 @@ const Stopwatch: React.FC<StopwatchProps> = ({ onContextReady }) => {
     };
   }, []);
   
+  // Горячие клавиши
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -148,12 +123,12 @@ const Stopwatch: React.FC<StopwatchProps> = ({ onContextReady }) => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isRunning, start, pause, reset, addLap]);
   
-  // ✅ Создаём упрощённый контекст для виджетов
-  const widgetContext = {
+  // Упрощённый контекст для виджетов
+  const widgetContext = useMemo(() => ({
     elapsedTime,
     isRunning,
     laps,
-  };
+  }), [elapsedTime, isRunning, laps]);
   
   return (
     <div className="p-6">

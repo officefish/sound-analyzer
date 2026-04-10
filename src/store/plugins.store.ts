@@ -1,4 +1,4 @@
-// src/store/pluginsStore.ts
+// src/store/pluginsStore.ts - удаляем restoreActivePluginContexts и связанные с ним вызовы
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -7,14 +7,9 @@ import { ModuleType } from '../types/modules';
 
 // Глобальный реестр оригинальных плагинов
 let globalPluginRegistry: IPlugin[] = [];
-let globalContextProvider: ((pluginId: string) => IPluginContext | undefined) | null = null;
 
 export const setPluginRegistry = (plugins: IPlugin[]) => {
   globalPluginRegistry = plugins;
-};
-
-export const setGlobalContextProvider = (provider: (pluginId: string) => IPluginContext | undefined) => {
-  globalContextProvider = provider;
 };
 
 interface PluginsState {
@@ -22,40 +17,29 @@ interface PluginsState {
   activePluginContexts: Map<string, IPluginContext>;
   pluginData: Record<string, any>;
   
-  // Получить плагин с применением сохранённого состояния
   getPlugin: (pluginId: string) => IPlugin | undefined;
   getPluginsByModule: (moduleId: ModuleType) => IPlugin[];
   getActivePluginsByModule: (moduleId: ModuleType) => IPlugin[];
   
-  // Управление состоянием
   setPluginEnabled: (pluginId: string, enabled: boolean) => void;
   updatePluginSettings: (pluginId: string, settings: Record<string, any>) => void;
   
-  // Управление активацией (с контекстом и вызовом колбэков)
   activatePlugin: (pluginId: string, context?: IPluginContext) => void;
   deactivatePlugin: (pluginId: string) => void;
   togglePlugin: (pluginId: string, context?: IPluginContext) => void;
   isPluginActive: (pluginId: string) => boolean;
   
-  // Восстановление контекстов для активных плагинов
-  restoreActivePluginContexts: () => void;
-  
-  // Выполнение действий
   executePluginAction: (pluginId: string, action: string, data?: any) => any;
   executeOnModule: (moduleId: ModuleType, action: string, data?: any) => any[];
   
-  // События
   emitModuleEvent: (moduleId: ModuleType, event: string, data?: any) => void;
   
-  // Виджеты
   getWidgetsByModule: (moduleId: ModuleType) => IPluginWidget[];
   
-  // Данные плагинов
   getPluginData: (pluginId: string) => any;
   setPluginData: (pluginId: string, data: any) => void;
 }
 
-// Вспомогательная функция для получения плагина с состоянием
 const getPluginWithState = (
   pluginId: string,
   pluginStates: Map<string, { enabled: boolean; settings: Record<string, any> }>
@@ -66,7 +50,6 @@ const getPluginWithState = (
   const state = pluginStates.get(pluginId);
   if (!state) return originalPlugin;
   
-  // Возвращаем копию плагина с применённым состоянием
   return {
     ...originalPlugin,
     enabled: state.enabled,
@@ -131,15 +114,12 @@ export const usePluginsStore = create<PluginsState>()(
         
         console.log(`🔌 Activating plugin: ${pluginId}`);
         
-        // Вызываем onActivate у плагина
-        if (plugin.onActivate) {
+        if (plugin.onActivate && context) {
           plugin.onActivate(context);
         }
         
-        // Обновляем состояние
         get().setPluginEnabled(pluginId, true);
         
-        // Сохраняем контекст
         if (context) {
           set((state) => ({
             activePluginContexts: new Map(state.activePluginContexts).set(pluginId, context),
@@ -162,16 +142,13 @@ export const usePluginsStore = create<PluginsState>()(
         
         console.log(`🔌 Deactivating plugin: ${pluginId}`);
         
-        // Вызываем onDeactivate у плагина с контекстом, если он есть
         if (plugin.onDeactivate) {
           const context = get().activePluginContexts.get(pluginId);
           plugin.onDeactivate(context);
         }
         
-        // Обновляем состояние
         get().setPluginEnabled(pluginId, false);
         
-        // Удаляем контекст
         set((state) => {
           const newContexts = new Map(state.activePluginContexts);
           newContexts.delete(pluginId);
@@ -183,8 +160,6 @@ export const usePluginsStore = create<PluginsState>()(
       
       togglePlugin: (pluginId, context) => {
         const plugin = get().getPlugin(pluginId);
-        console.log(`🔄 Toggle plugin: ${pluginId}, current state: ${plugin?.enabled}`);
-        
         if (plugin?.enabled) {
           get().deactivatePlugin(pluginId);
         } else {
@@ -195,38 +170,6 @@ export const usePluginsStore = create<PluginsState>()(
       isPluginActive: (pluginId) => {
         const plugin = get().getPlugin(pluginId);
         return plugin?.enabled || false;
-      },
-      
-      // ✅ Восстанавливаем контексты для всех активных плагинов
-      restoreActivePluginContexts: () => {
-        if (!globalContextProvider) {
-          console.warn('⚠️ No global context provider set');
-          return;
-        }
-        
-        const activePlugins = get().getPluginsByModule('stopwatch')
-          .concat(get().getPluginsByModule('microphone'))
-          .filter(p => p.enabled);
-        
-        console.log(`🔄 Restoring contexts for ${activePlugins.length} active plugins...`);
-        
-        activePlugins.forEach(plugin => {
-          const context = globalContextProvider!(plugin.id);
-          if (context) {
-            set((state) => ({
-              activePluginContexts: new Map(state.activePluginContexts).set(plugin.id, context),
-            }));
-            
-            // Вызываем onActivate при восстановлении, если нужно
-            if (plugin.onActivate) {
-              plugin.onActivate(context);
-            }
-            
-            console.log(`✅ Context restored for plugin: ${plugin.id}`);
-          } else {
-            console.warn(`⚠️ Could not restore context for plugin: ${plugin.id}`);
-          }
-        });
       },
       
       executePluginAction: (pluginId, action, data) => {
@@ -301,12 +244,6 @@ export const usePluginsStore = create<PluginsState>()(
           const restored = new Map((state as any).pluginStates);
           (state as any).pluginStates = restored;
           console.log('🔄 Plugins store rehydrated, states:', Array.from(restored.entries()));
-          
-          // После восстановления вызываем restoreActivePluginContexts
-          setTimeout(() => {
-            const store = usePluginsStore.getState();
-            store.restoreActivePluginContexts();
-          }, 100);
         }
       },
     }
