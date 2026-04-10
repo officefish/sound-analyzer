@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { usePluginsStore } from '../store/plugins.store';
 import { IPluginContext, IPlugin } from '../types/plugins';
 import { ModuleType } from '../types/modules';
@@ -17,31 +17,36 @@ export const usePlugins = (moduleId: ModuleType, context?: IPluginContext) => {
     getPluginData,
     setPluginData,
     updatePluginSettings,
-    registerPlugin,
-    registerPlugins,
+    // registerPlugin,
+    // registerPlugins,
   } = usePluginsStore();
   
+  const isMountedRef = useRef(true);
+  const hasActivatedRef = useRef(false);
+  
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
   const allPlugins = useMemo(() => {
-    const plugins = getPluginsByModule(moduleId);
-    console.log(`🔍 usePlugins (${moduleId}): found ${plugins.length} plugins:`, plugins.map(p => p.id));
-    return plugins;
+    return getPluginsByModule(moduleId);
   }, [moduleId, getPluginsByModule]);
   
   const activePlugins = useMemo(() => {
-    const plugins = getActivePluginsByModule(moduleId);
-    console.log(`✅ Active plugins for ${moduleId}:`, plugins.map(p => p.id));
-    return plugins;
+    return getActivePluginsByModule(moduleId);
   }, [moduleId, getActivePluginsByModule]);
   
-  // Автоматическая активация плагинов с контекстом при монтировании
+  // ✅ Автоматическая активация плагинов с контекстом при монтировании (только один раз)
   useEffect(() => {
-    console.log(`🔄 usePlugins effect for ${moduleId}, context:`, context ? 'provided' : 'not provided');
-    
-    if (context) {
-      // Активируем все плагины, которые должны быть активны (восстанавливаем состояние)
+    if (context && !hasActivatedRef.current && isMountedRef.current) {
+      hasActivatedRef.current = true;
+      
       allPlugins.forEach(plugin => {
         if (plugin.enabled && !isPluginActive(plugin.id)) {
-          console.log(`🔌 Activating plugin on mount: ${plugin.id}`);
+          console.log(`🔌 Auto-activating plugin: ${plugin.id}`);
           activatePlugin(plugin.id, context);
         }
       });
@@ -49,22 +54,22 @@ export const usePlugins = (moduleId: ModuleType, context?: IPluginContext) => {
   }, [moduleId, allPlugins, context, activatePlugin, isPluginActive]);
   
   const activateWithContext = useCallback((pluginId: string) => {
-    console.log(`🔌 Activating plugin with context: ${pluginId}`);
+    if (!isMountedRef.current) return;
     activatePlugin(pluginId, context);
   }, [context, activatePlugin]);
   
   const execute = useCallback((pluginId: string, action: string, data?: any) => {
+    if (!isMountedRef.current) return null;
     return executePluginAction(pluginId, action, data);
   }, [executePluginAction]);
   
   const executeOnAll = useCallback((action: string, data?: any) => {
-    const results = executeOnModule(moduleId, action, data);
-    console.log(`🎯 executeOnAll (${moduleId}, ${action}):`, results);
-    return results;
+    if (!isMountedRef.current) return [];
+    return executeOnModule(moduleId, action, data);
   }, [moduleId, executeOnModule]);
   
   const emitEvent = useCallback((event: string, data?: any) => {
-    console.log(`📡 emitEvent (${moduleId}, ${event}):`, data);
+    if (!isMountedRef.current) return;
     emitModuleEvent(moduleId, event, data);
   }, [moduleId, emitModuleEvent]);
   
@@ -84,12 +89,12 @@ export const usePlugins = (moduleId: ModuleType, context?: IPluginContext) => {
     activate: activateWithContext,
     deactivate: deactivatePlugin,
     toggle: (pluginId: string) => {
-      console.log(`🔄 Toggling plugin: ${pluginId}`);
+      if (!isMountedRef.current) return;
       togglePlugin(pluginId, context);
     },
     
-    registerPlugin,
-    registerPlugins,
+    // registerPlugin,
+    // registerPlugins,
     
     execute,
     executeOnAll,

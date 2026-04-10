@@ -84,21 +84,16 @@ const PluginList: React.FC = () => {
                 </div>
                 
                 {/* Toggle Switch */}
-                <button
-                  onClick={() => togglePlugin(plugin.id)}
-                  className={`
-                    flex-shrink-0 relative inline-flex h-5 w-9 rounded-full transition-colors duration-200
-                    ${isActive ? 'bg-indigo-500' : 'bg-gray-600'}
-                  `}
-                >
-                  <span
+               <button
+                    onClick={() => {
+                        console.log(`📌 Toggling plugin: ${plugin.id}, current: ${plugin.enabled}`);
+                        togglePlugin(plugin.id);
+                    }}
                     className={`
-                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200
-                      ${isActive ? 'translate-x-4' : 'translate-x-0.5'}
-                      absolute top-0.5
+                        flex-shrink-0 relative inline-flex h-5 w-9 rounded-full transition-colors duration-200
+                        ${isActive ? 'bg-indigo-500' : 'bg-gray-600'}
                     `}
-                  />
-                </button>
+                    ></button>
               </div>
               
               {/* Кнопка настроек (если есть) */}

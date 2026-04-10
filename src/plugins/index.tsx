@@ -7,7 +7,7 @@ import { setPluginRegistry } from '../store/plugins.store';
 
 import { IPlugin } from '../types/plugins';
 
-// ✅ Явно указываем тип массива
+// Список всех оригинальных плагинов
 export const ALL_PLUGINS: IPlugin[] = [
   LapHistoryPlugin,
   SoundEffectPlugin,
@@ -15,43 +15,17 @@ export const ALL_PLUGINS: IPlugin[] = [
   RecorderPlugin,
 ];
 
-// Сохраняем плагины в глобальный реестр для восстановления
+// Сохраняем оригинальные плагины в глобальный реестр
 setPluginRegistry(ALL_PLUGINS);
 
-// ✅ Теперь TypeScript знает, что у plugin есть свойства
+// Логируем для отладки
 ALL_PLUGINS.forEach((plugin: IPlugin) => {
-  console.log(`📋 Plugin ${plugin.id}: moduleId = "${plugin.moduleId}", type = ${typeof plugin.moduleId}`);
-  if (!plugin.moduleId) {
-    console.error(`❌ Plugin ${plugin.id} has no moduleId!`);
-  }
+  console.log(`📋 Plugin registered: ${plugin.id} (${plugin.moduleId})`);
 });
 
-// Функция для регистрации всех плагинов в store
-export const registerAllPlugins = (store: any) => {
-  const state = store.getState();
-  
-  console.log('🔌 Registering all plugins...');
-  console.log(`📦 Current plugins count: ${state.plugins.length}`);
-  
-  // Если плагинов нет или их меньше чем должно быть, регистрируем
-  if (state.plugins.length < ALL_PLUGINS.length) {
-    console.log('  Registering missing plugins...');
-    ALL_PLUGINS.forEach((plugin: IPlugin) => {
-      const existing = state.plugins.find((p: IPlugin) => p.id === plugin.id);
-      if (!existing) {
-        console.log(`    ➕ Registering: ${plugin.id}`);
-        store.getState().registerPlugin(plugin);
-      }
-    });
-  } else {
-    console.log('  All plugins already registered');
-  }
-  
-  // Проверяем результат
-  const newState = store.getState();
-  console.log('✅ Registration complete!');
-  console.log(`📊 Stopwatch plugins: ${newState.getPluginsByModule('stopwatch').map((p: IPlugin) => p.id).join(', ')}`);
-  console.log(`📊 Microphone plugins: ${newState.getPluginsByModule('microphone').map((p: IPlugin) => p.id).join(', ')}`);
+// Функция для инициализации (ничего не делает, просто для совместимости)
+export const registerAllPlugins = () => {
+  console.log('✅ Plugin registry ready, plugins available:', ALL_PLUGINS.length);
 };
 
 export {

@@ -3,7 +3,8 @@ import { ReactNode } from 'react';
 
 // Тип для функции-обработчика
 export type PluginHandler = (...args: any[]) => any;
-// Виджет плагина
+
+// Виджет плагина - контекст может быть любым объектом
 export interface IPluginWidget {
   id: string;
   pluginId: string;
@@ -15,13 +16,13 @@ export interface IPluginWidget {
   height?: number | 'auto';
   component: React.ComponentType<{
     plugin: IPlugin;
-    context?: IPluginContext;
+    context?: any;  // ✅ Делаем контекст любым (any)
     onAction: (action: string, data?: any) => void;
     isActive: boolean;
   }>;
 }
 
-// ✅ Гибкий контекст — может содержать любые поля
+// Гибкий контекст — может содержать любые поля
 export interface IPluginContext {
   moduleId: ModuleType;
   moduleState: any;
@@ -34,8 +35,7 @@ export interface IPluginContext {
   getVolume?: () => number;
   log?: (message: string, level?: 'info' | 'warn' | 'error') => void;
   
-  // ✅ Динамические поля для конкретных модулей
-  // Позволяет добавлять любые дополнительные поля
+  // Динамические поля для конкретных модулей
   [key: string]: any;
 }
 
@@ -80,8 +80,6 @@ export interface ISettingField {
   options?: { label: string; value: any }[];
   defaultValue: any;
 }
-
-
 // Регистратор плагинов
 export interface IPluginRegistry {
   register(plugin: IPlugin): void;
