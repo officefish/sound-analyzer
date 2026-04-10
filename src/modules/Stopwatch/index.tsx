@@ -2,8 +2,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { usePlugins } from '../../hooks/usePlugins';
 import { usePluginsStore } from '../../store/plugins.store';
 import Footer from '../../components/Layout/Footer';
-import { LapHistoryPlugin } from './plugins/LapHistoryPlugin';
-import { SoundEffectPlugin } from './plugins/SoundEffectPlugin';
 
 interface Lap {
   id: number;
@@ -19,12 +17,16 @@ const Stopwatch: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const lapCounterRef = useRef<number>(0);
-  
-  // Подключаем плагины
-  const { activePlugins, executeOnAll, emitEvent } = usePlugins('stopwatch', {
-    moduleId: 'stopwatch',
+
+  // В начале компонента Stopwatch добавь:
+  console.log('🔄 Stopwatch component mounted');
+
+  // При создании контекста:
+  const pluginContext = {
+    moduleId: 'stopwatch' as const,
     moduleState: { elapsedTime, isRunning, laps },
-    dispatch: (action, payload) => {
+    dispatch: (action: string, payload?: any) => {
+      console.log(`📡 Stopwatch dispatch: ${action}`, payload);
       switch (action) {
         case 'addLap': addLap(); break;
         case 'reset': reset(); break;
@@ -33,26 +35,26 @@ const Stopwatch: React.FC = () => {
       }
     },
     getData: () => ({ elapsedTime, isRunning, laps }),
-    setData: (data) => {
+    setData: (data: any) => {
+      console.log(`📝 Stopwatch setData:`, data);
       if (data.elapsedTime !== undefined) setElapsedTime(data.elapsedTime);
       if (data.laps !== undefined) setLaps(data.laps);
     },
-  });
+    // Специфичные поля
+    elapsedTime,
+    isRunning,
+    laps,
+  };
+
+  console.log('📦 Stopwatch context created:', pluginContext);
   
-  // Регистрируем плагины при монтировании
-  useEffect(() => {
-    const state = usePluginsStore.getState();
-    
-    const existingPlugins = state.getPluginsByModule('stopwatch');
-    const existingIds = existingPlugins.map(p => p.id);
-    
-    if (!existingIds.includes(LapHistoryPlugin.id)) {
-      state.registerPlugin(LapHistoryPlugin);
-    }
-    if (!existingIds.includes(SoundEffectPlugin.id)) {
-      state.registerPlugin(SoundEffectPlugin);
-    }
-  }, []);
+  
+  // Подключаем плагины
+  const { activePlugins, executeOnAll, emitEvent } = usePlugins('stopwatch', pluginContext);
+  
+  // Получаем виджеты для отображения
+  const { getWidgetsByModule } = usePluginsStore();
+  const widgets = getWidgetsByModule('stopwatch');
   
   const formatTime = useCallback((ms: number): string => {
     const hours = Math.floor(ms / 3600000);
@@ -153,23 +155,7 @@ const Stopwatch: React.FC = () => {
   }, [isRunning, start, pause, reset, addLap]);
   
   return (
-    <div className="h-full flex flex-col relative">
-      {/* Рендерим UI компоненты активных плагинов */}
-      {activePlugins.map(plugin => 
-        plugin.UIComponent && (
-          <plugin.UIComponent
-            isActive={true}
-            key={plugin.id}
-            context={{ elapsedTime, isRunning, laps }}
-            onAction={(action, data) => {
-              if (plugin.execute) {
-                plugin.execute(action, data);
-              }
-            }}
-          />
-        )
-      )}
-      
+    <div className="h-full flex flex-col">
       {/* Дисплей */}
       <div className="flex-1 flex items-center justify-center">
         <div className="bg-slate-900 text-green-400 text-6xl font-mono font-bold py-8 px-6 rounded-2xl shadow-inner animate-glow tracking-wider">
@@ -226,6 +212,51 @@ const Stopwatch: React.FC = () => {
           )}
         </ul>
       </div>
+      
+      {/* Виджеты плагинов */}
+      {widgets.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="border-t border-white/10 pt-3">
+            <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+              🔌 Плагины
+            </h3>
+          </div>
+          
+          {widgets.map((widget) => {
+            const plugin = activePlugins.find(p => p.id === widget.pluginId);
+            if (!plugin) return null;
+            
+            return (
+              <div
+                key={widget.id}
+                className={`
+                  bg-white/5 rounded-xl border border-white/10 overflow-hidden
+                  ${widget.width === 'half' ? 'w-full md:w-1/2' : 'w-full'}
+                `}
+              >
+                {widget.title && (
+                  <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
+                    {widget.icon && <span className="text-sm">{widget.icon}</span>}
+                    <span className="text-white text-xs font-medium">{widget.title}</span>
+                  </div>
+                )}
+                <div className="p-3">
+                  <widget.component
+                    plugin={plugin}
+                    context={pluginContext}
+                    onAction={(action, data) => {
+                      if (plugin.execute) {
+                        plugin.execute(action, data);
+                      }
+                    }}
+                    isActive={plugin.enabled}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       
       {/* Активные плагины индикатор */}
       {activePlugins.length > 0 && (

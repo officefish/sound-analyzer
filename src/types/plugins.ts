@@ -1,10 +1,45 @@
 import { ModuleType } from './modules';
+import { ReactNode } from 'react';
 
 // Тип для функции-обработчика
 export type PluginHandler = (...args: any[]) => any;
+// Виджет плагина
+export interface IPluginWidget {
+  id: string;
+  pluginId: string;
+  title: string;
+  icon?: string;
+  position?: 'top' | 'bottom' | 'sidebar';
+  order?: number;
+  width?: 'full' | 'half' | 'auto';
+  height?: number | 'auto';
+  component: React.ComponentType<{
+    plugin: IPlugin;
+    context?: IPluginContext;
+    onAction: (action: string, data?: any) => void;
+    isActive: boolean;
+  }>;
+}
 
-// Базовый интерфейс плагина (универсальный)
+// ✅ Гибкий контекст — может содержать любые поля
+export interface IPluginContext {
+  moduleId: ModuleType;
+  moduleState: any;
+  dispatch: (action: string, payload?: any) => void;
+  getData: () => any;
+  setData: (data: any) => void;
+  
+  // Опциональные методы для специфичных модулей
+  getStream?: () => MediaStream | null;
+  getVolume?: () => number;
+  log?: (message: string, level?: 'info' | 'warn' | 'error') => void;
+  
+  // ✅ Динамические поля для конкретных модулей
+  // Позволяет добавлять любые дополнительные поля
+  [key: string]: any;
+}
 
+// Базовый интерфейс плагина
 export interface IPlugin {
   id: string;
   name: string;
@@ -14,26 +49,27 @@ export interface IPlugin {
   moduleId: ModuleType;
   enabled: boolean;
   
-  // Все методы принимают опциональный context
+  // Жизненный цикл
   onActivate?: (context?: IPluginContext) => void;
   onDeactivate?: (context?: IPluginContext) => void;
+  
+  // События модуля
   onModuleEvent?: (event: string, data: any, context?: IPluginContext) => void;
+  
+  // Универсальный метод execute
   execute: (action: string, data?: any, context?: IPluginContext) => any;
   
+  // Список доступных действий (для UI)
   availableActions?: string[];
-  UIComponent?: React.ComponentType<{ 
-    context?: any; 
-    onAction: (action: string, data?: any) => void;
-    isActive: boolean;
-  }>;
+  
+  // Виджет плагина
+  widget?: IPluginWidget;
+  
+  // Настройки
   settings?: Record<string, any>;
   settingsSchema?: ISettingField[];
 }
 
-// // Тип для функции-обработчика
-// export type PluginHandler = (...args: any[]) => any;
-
-// Схема настроек для UI
 export interface ISettingField {
   key: string;
   label: string;
@@ -45,17 +81,6 @@ export interface ISettingField {
   defaultValue: any;
 }
 
-// Контекст модуля для плагина
-export interface IPluginContext {
-  moduleId: ModuleType;
-  moduleState: any;
-  dispatch: (action: string, payload?: any) => void;
-  getData: () => any;
-  setData: (data: any) => void;
-  getStream?: () => MediaStream | null;
-  getVolume?: () => number;
-  log?: (message: string, level?: 'info' | 'warn' | 'error') => void;
-}
 
 // Регистратор плагинов
 export interface IPluginRegistry {

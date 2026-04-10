@@ -9,7 +9,6 @@ const PluginList: React.FC = () => {
     getPluginsByModule, 
     togglePlugin, 
     updatePluginSettings,
-    isPluginActive 
   } = usePluginsStore();
   
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
@@ -36,7 +35,7 @@ const PluginList: React.FC = () => {
     <div className="space-y-3">
       <div className="text-gray-400 text-xs uppercase tracking-wider mb-3 px-3 flex justify-between items-center">
         <span>🔌 Плагины ({plugins.length})</span>
-        <span className="text-[10px] text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
+        <span className="flex-shrink-0 text-[10px] text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
           {activeCount} активны
         </span>
       </div>
@@ -59,7 +58,7 @@ const PluginList: React.FC = () => {
             <div className="p-3">
               <div className="flex items-center gap-3">
                 <div className={`
-                  text-2xl transition-all duration-200
+                  flex-shrink-0 text-2xl transition-all duration-200
                   ${isActive ? 'scale-110' : 'scale-100'}
                 `}>
                   {plugin.icon}
@@ -67,14 +66,14 @@ const PluginList: React.FC = () => {
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-white text-sm">
+                    <span className="font-medium text-white text-sm truncate">
                       {plugin.name}
                     </span>
-                    <span className="text-[10px] text-gray-500">
+                    <span className="flex-shrink-0 text-[10px] text-gray-500">
                       v{plugin.version}
                     </span>
                     {isActive && (
-                      <span className="text-[10px] text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded-full">
+                      <span className="flex-shrink-0 text-[10px] text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded-full">
                         активен
                       </span>
                     )}
@@ -88,7 +87,7 @@ const PluginList: React.FC = () => {
                 <button
                   onClick={() => togglePlugin(plugin.id)}
                   className={`
-                    relative inline-flex h-5 w-9 rounded-full transition-colors duration-200
+                    flex-shrink-0 relative inline-flex h-5 w-9 rounded-full transition-colors duration-200
                     ${isActive ? 'bg-indigo-500' : 'bg-gray-600'}
                   `}
                 >

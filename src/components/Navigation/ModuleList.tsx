@@ -8,7 +8,7 @@ const ModuleList: React.FC = () => {
   return (
     <div className="space-y-2">
       <div className="text-gray-400 text-xs uppercase tracking-wider mb-3 px-3">
-        📦 Модули
+        📦 Модули ({MODULES.length})
       </div>
       
       {MODULES.map((module) => (
@@ -25,16 +25,16 @@ const ModuleList: React.FC = () => {
         >
           <div className="flex items-center gap-3">
             <span className="text-2xl">{module.icon}</span>
-            <div className="flex-1">
-              <div className="font-medium text-white text-sm">
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-white text-sm truncate">
                 {module.name}
               </div>
-              <div className="text-gray-400 text-xs mt-0.5">
+              <div className="text-gray-400 text-xs mt-0.5 truncate">
                 {module.description}
               </div>
             </div>
             {navigationCount[module.id] > 0 && (
-              <span className="text-xs text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
+              <span className="flex-shrink-0 text-xs text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
                 {navigationCount[module.id]}
               </span>
             )}

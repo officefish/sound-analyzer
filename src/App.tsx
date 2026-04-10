@@ -25,25 +25,35 @@ const App: React.FC = () => {
   const CurrentComponent = moduleComponents[currentApp];
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Sidebar - фиксированная ширина, независимая прокрутка */}
       <Sidebar />
       
-      <div className="flex-1 flex flex-col">
+      {/* Основная область - занимает всё остальное пространство */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Header - фиксированная высота */}
         <Header />
         
-        <main className="flex-1 p-6 overflow-auto">
+        {/* Main - занимает всё доступное пространство с прокруткой */}
+        <main className="flex-1 overflow-y-auto p-6 min-h-0">
           <div className="max-w-2xl mx-auto h-full flex flex-col">
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 shadow-2xl border border-white/10 flex-1">
-              <Suspense fallback={
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-gray-400">Загрузка...</div>
-                </div>
-              }>
-                <CurrentComponent />
-              </Suspense>
+            {/* Контейнер модуля - фиксированная структура, не растягивается от содержимого */}
+            <div className="bg-white/5 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/10 flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="flex-1 overflow-y-auto p-6">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-gray-400">Загрузка...</div>
+                  </div>
+                }>
+                  <CurrentComponent />
+                </Suspense>
+              </div>
             </div>
             
-            <Footer />
+            {/* Footer - фиксированная высота */}
+            <div className="flex-shrink-0 mt-4">
+              <Footer />
+            </div>
           </div>
         </main>
       </div>

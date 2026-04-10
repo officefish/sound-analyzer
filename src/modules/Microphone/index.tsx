@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePlugins } from '../../hooks/usePlugins';
 import { usePluginsStore } from '../../store/plugins.store';
 import Footer from '../../components/Layout/Footer';
-import { NoiseGatePlugin } from './plugins/NoiseGatePlugin';
-import { RecorderPlugin } from './plugins/RecorderPlugin';
 
 const Microphone: React.FC = () => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -21,38 +19,36 @@ const Microphone: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
   
-  // Подключаем плагины
-  const { activePlugins, executeOnAll, emitEvent, registerPlugin } = usePlugins('microphone', {
-    moduleId: 'microphone',
+  // Создаём контекст для плагинов
+  const pluginContext = {
+    moduleId: 'microphone' as const,
     moduleState: { isRecording, rawVolume, processedVolume },
-    dispatch: (action, payload) => {
+    dispatch: (action: string, payload?: any) => {
       switch (action) {
         case 'startRecording': startRecording(); break;
         case 'stopRecording': stopRecording(); break;
       }
     },
     getData: () => ({ isRecording, rawVolume, processedVolume, stream: mediaStreamRef.current }),
-    setData: (data) => {
+    setData: (data: any) => {
       if (data.processedVolume !== undefined) setProcessedVolume(data.processedVolume);
     },
-  });
+    getStream: () => mediaStreamRef.current,
+    getVolume: () => processedVolume,
+    // ✅ Добавляем специфичные для микрофона поля
+    isRecording,
+    rawVolume,
+    processedVolume,
+    recordingDuration,
+    devices: audioDevices,
+  };
   
-  // Регистрируем плагины при монтировании (используем импортированный store)
-  useEffect(() => {
-    // Получаем состояние store напрямую через импортированный хук
-    const state = usePluginsStore.getState();
-    
-    // Регистрируем плагины, если они ещё не зарегистрированы
-    const existingPlugins = state.getPluginsByModule('microphone');
-    const existingIds = existingPlugins.map(p => p.id);
-    
-    if (!existingIds.includes(NoiseGatePlugin.id)) {
-      state.registerPlugin(NoiseGatePlugin);
-    }
-    if (!existingIds.includes(RecorderPlugin.id)) {
-      state.registerPlugin(RecorderPlugin);
-    }
-  }, []);
+  // Подключаем плагины
+  const { activePlugins, executeOnAll, emitEvent } = usePlugins('microphone', pluginContext);
+  
+  // Получаем виджеты для отображения
+  const { getWidgetsByModule } = usePluginsStore();
+  const widgets = getWidgetsByModule('microphone');
   
   const getAudioDevices = useCallback(async () => {
     try {
@@ -80,7 +76,6 @@ const Microphone: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       mediaStreamRef.current = stream;
       
-      // Уведомляем плагины о новом стриме
       emitEvent('streamAvailable', { stream });
       
       audioContextRef.current = new AudioContext();
@@ -93,7 +88,6 @@ const Microphone: React.FC = () => {
       await audioContextRef.current.resume();
       setIsRecording(true);
       
-      // Таймер длительности записи
       let duration = 0;
       durationIntervalRef.current = window.setInterval(() => {
         duration++;
@@ -111,10 +105,9 @@ const Microphone: React.FC = () => {
         
         setRawVolume(normalizedVolume);
         
-        // Отправляем фрейм в плагины для обработки
         let processed = normalizedVolume;
         const results = executeOnAll('processAudioFrame', { volume: normalizedVolume });
-        if (results.length > 0 && results[0] !== null) {
+        if (results.length > 0 && results[0] !== null && typeof results[0] === 'number') {
           processed = results[0];
         }
         
@@ -199,27 +192,10 @@ const Microphone: React.FC = () => {
     return 'bg-red-500';
   };
   
-  // Визуализация разницы между сырым и обработанным звуком
   const showNoiseGateEffect = processedVolume !== rawVolume;
   
   return (
-    <div className="h-full flex flex-col relative">
-      {/* Рендерим UI компоненты активных плагинов */}
-      {activePlugins.map(plugin => 
-        plugin.UIComponent && (
-          <plugin.UIComponent
-            isActive={true}
-            key={plugin.id}
-            context={{ isRecording, rawVolume, processedVolume, duration: recordingDuration }}
-            onAction={(action, data) => {
-              if (plugin.execute) {
-                plugin.execute(action, data);
-              }
-            }}
-          />
-        )
-      )}
-      
+    <div className="h-full flex flex-col">
       {/* Визуализация уровня звука */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         <div className="relative">
@@ -238,7 +214,6 @@ const Microphone: React.FC = () => {
           )}
         </div>
         
-        {/* Raw уровень */}
         <div className="w-64">
           <div className="flex justify-between text-gray-400 text-xs mb-1">
             <span>🎧 Входной сигнал</span>
@@ -252,7 +227,6 @@ const Microphone: React.FC = () => {
           </div>
         </div>
         
-        {/* Обработанный уровень (если есть активные плагины обработки) */}
         {showNoiseGateEffect && (
           <div className="w-64">
             <div className="flex justify-between text-gray-400 text-xs mb-1">
@@ -268,7 +242,6 @@ const Microphone: React.FC = () => {
           </div>
         )}
         
-        {/* Текущий уровень */}
         {isRecording && (
           <div className="text-center">
             <div className="text-3xl font-mono text-green-400">
@@ -326,6 +299,51 @@ const Microphone: React.FC = () => {
           )}
         </select>
       </div>
+      
+      {/* Виджеты плагинов */}
+      {widgets.length > 0 && (
+        <div className="mt-4 space-y-3">
+          <div className="border-t border-white/10 pt-3">
+            <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+              🔌 Плагины
+            </h3>
+          </div>
+          
+          {widgets.map((widget) => {
+            const plugin = activePlugins.find(p => p.id === widget.pluginId);
+            if (!plugin) return null;
+            
+            return (
+              <div
+                key={widget.id}
+                className={`
+                  bg-white/5 rounded-xl border border-white/10 overflow-hidden
+                  ${widget.width === 'half' ? 'w-full md:w-1/2' : 'w-full'}
+                `}
+              >
+                {widget.title && (
+                  <div className="px-3 py-2 bg-white/5 border-b border-white/10 flex items-center gap-2">
+                    {widget.icon && <span className="text-sm">{widget.icon}</span>}
+                    <span className="text-white text-xs font-medium">{widget.title}</span>
+                  </div>
+                )}
+                <div className="p-3">
+                  <widget.component
+                    plugin={plugin}
+                    context={pluginContext}
+                    onAction={(action, data) => {
+                      if (plugin.execute) {
+                        plugin.execute(action, data);
+                      }
+                    }}
+                    isActive={plugin.enabled}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       
       {/* Активные плагины индикатор */}
       {activePlugins.length > 0 && (

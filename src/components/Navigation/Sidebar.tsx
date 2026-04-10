@@ -10,9 +10,9 @@ const Sidebar: React.FC = () => {
   const [activeSection, setActiveSection] = useState<SidebarSection>('modules');
   
   return (
-    <div className="w-72 bg-black/30 backdrop-blur-sm border-r border-white/10 flex flex-col">
-      {/* Логотип */}
-      <div className="p-6 border-b border-white/10">
+    <div className="w-72 bg-black/30 backdrop-blur-sm border-r border-white/10 flex flex-col h-screen">
+      {/* Логотип - фиксированная высота */}
+      <div className="flex-shrink-0 p-6 border-b border-white/10">
         <h1 className="text-white text-xl font-bold flex items-center gap-2">
           <span>🎵</span>
           <span>SoundLab</span>
@@ -20,8 +20,8 @@ const Sidebar: React.FC = () => {
         <p className="text-gray-500 text-xs mt-1">v2.0.0</p>
       </div>
       
-      {/* Переключатель разделов */}
-      <div className="flex border-b border-white/10">
+      {/* Переключатель разделов - фиксированная высота */}
+      <div className="flex-shrink-0 flex border-b border-white/10">
         <button
           onClick={() => setActiveSection('modules')}
           className={`
@@ -54,13 +54,15 @@ const Sidebar: React.FC = () => {
         </button>
       </div>
       
-      {/* Контент в зависимости от выбранного раздела */}
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-custom">
-        {activeSection === 'modules' ? <ModuleList /> : <PluginList />}
+      {/* Контент с прокруткой - занимает всё доступное пространство */}
+      <div className="flex-1 overflow-y-auto scrollbar-custom min-h-0">
+        <div className="p-4">
+          {activeSection === 'modules' ? <ModuleList /> : <PluginList />}
+        </div>
       </div>
       
-      {/* Статистика внизу */}
-      <div className="p-4 border-t border-white/10">
+      {/* Статистика внизу - фиксированная высота */}
+      <div className="flex-shrink-0 p-4 border-t border-white/10">
         <div className="text-gray-500 text-xs space-y-1">
           <div className="flex justify-between">
             <span>📊 Статистика:</span>

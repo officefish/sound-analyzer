@@ -1,42 +1,45 @@
+// src/store/pluginsStore.ts
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { IPlugin, IPluginContext } from '../types/plugins';
+import { IPlugin, IPluginWidget, IPluginContext } from '../types/plugins';
 import { ModuleType } from '../types/modules';
 
+// Глобальный реестр плагинов для восстановления
+let globalPluginRegistry: IPlugin[] = [];
+
+export const setPluginRegistry = (plugins: IPlugin[]) => {
+  globalPluginRegistry = plugins;
+};
+
 interface PluginsState {
-  // Состояние
   plugins: IPlugin[];
   activePluginContexts: Map<string, IPluginContext>;
   pluginData: Record<string, any>;
   
-  // Регистрация
   registerPlugin: (plugin: IPlugin) => void;
   registerPlugins: (plugins: IPlugin[]) => void;
   unregisterPlugin: (pluginId: string) => void;
   
-  // Управление активацией
   activatePlugin: (pluginId: string, context?: IPluginContext) => void;
   deactivatePlugin: (pluginId: string) => void;
   togglePlugin: (pluginId: string, context?: IPluginContext) => void;
   
-  // Получение плагинов
   getPluginsByModule: (moduleId: ModuleType) => IPlugin[];
   getActivePluginsByModule: (moduleId: ModuleType) => IPlugin[];
   isPluginActive: (pluginId: string) => boolean;
   
-  // Работа с данными плагинов
   getPluginData: (pluginId: string) => any;
   setPluginData: (pluginId: string, data: any) => void;
   
-  // Выполнение действий
   executePluginAction: (pluginId: string, action: string, data?: any) => any;
   executeOnModule: (moduleId: ModuleType, action: string, data?: any) => any[];
   
-  // Настройки
   updatePluginSettings: (pluginId: string, settings: Record<string, any>) => void;
   
-  // События
   emitModuleEvent: (moduleId: ModuleType, event: string, data?: any) => void;
+  
+  getWidgetsByModule: (moduleId: ModuleType) => IPluginWidget[];
 }
 
 export const usePluginsStore = create<PluginsState>()(
@@ -47,17 +50,37 @@ export const usePluginsStore = create<PluginsState>()(
       pluginData: {},
       
       registerPlugin: (plugin) => {
-        set((state) => ({
-          plugins: [...state.plugins, plugin],
-        }));
-        console.log(`✅ Plugin registered: ${plugin.id} (${plugin.name})`);
+        console.log(`📝 registerPlugin called: ${plugin.id}, moduleId: ${plugin.moduleId}`);
+        
+        // Проверяем, что moduleId корректен
+        if (!plugin.moduleId || (plugin.moduleId !== 'stopwatch' && plugin.moduleId !== 'microphone')) {
+          console.error(`❌ Plugin ${plugin.id} has invalid moduleId: ${plugin.moduleId}`);
+          return;
+        }
+        
+        set((state) => {
+          // Проверяем, нет ли уже такого плагина
+          const exists = state.plugins.some(p => p.id === plugin.id);
+          if (exists) {
+            console.log(`  Plugin ${plugin.id} already exists, skipping`);
+            return state;
+          }
+          return {
+            plugins: [...state.plugins, plugin],
+          };
+        });
+        console.log(`✅ Plugin registered: ${plugin.id} (${plugin.name}) for module ${plugin.moduleId}`);
       },
       
       registerPlugins: (plugins) => {
-        set((state) => ({
-          plugins: [...state.plugins, ...plugins],
-        }));
-        console.log(`✅ Registered ${plugins.length} plugins`);
+        console.log(`📝 registerPlugins called with ${plugins.length} plugins`);
+        set((state) => {
+          const newPlugins = plugins.filter(p => !state.plugins.some(existing => existing.id === p.id));
+          console.log(`  Adding ${newPlugins.length} new plugins`);
+          return {
+            plugins: [...state.plugins, ...newPlugins],
+          };
+        });
       },
       
       unregisterPlugin: (pluginId) => {
@@ -73,47 +96,50 @@ export const usePluginsStore = create<PluginsState>()(
       
       activatePlugin: (pluginId, context) => {
         const plugin = get().plugins.find(p => p.id === pluginId);
-        if (!plugin || plugin.enabled) return;
+        if (!plugin) {
+          console.error(`❌ Plugin not found: ${pluginId}`);
+          return;
+        }
+        if (plugin.enabled) return;
         
-        // ✅ context может быть undefined, это ок
-        if (plugin.onActivate) {
-            plugin.onActivate(context);
+        if (plugin.onActivate && context) {
+          plugin.onActivate(context);
         }
         
         set((state) => ({
-            plugins: state.plugins.map(p =>
+          plugins: state.plugins.map(p =>
             p.id === pluginId ? { ...p, enabled: true } : p
-            ),
-            activePluginContexts: context 
+          ),
+          activePluginContexts: context 
             ? new Map(state.activePluginContexts).set(pluginId, context)
             : new Map(state.activePluginContexts),
         }));
         
         console.log(`🔌 Plugin activated: ${pluginId}`);
-        },
-
-        deactivatePlugin: (pluginId) => {
+      },
+      
+      deactivatePlugin: (pluginId) => {
         const plugin = get().plugins.find(p => p.id === pluginId);
         if (!plugin || !plugin.enabled) return;
         
         if (plugin.onDeactivate) {
-            const context = get().activePluginContexts.get(pluginId);
-            plugin.onDeactivate(context);
+          const context = get().activePluginContexts.get(pluginId);
+          plugin.onDeactivate(context);
         }
         
         set((state) => {
-            const newContexts = new Map(state.activePluginContexts);
-            newContexts.delete(pluginId);
-            return {
+          const newContexts = new Map(state.activePluginContexts);
+          newContexts.delete(pluginId);
+          return {
             plugins: state.plugins.map(p =>
-                p.id === pluginId ? { ...p, enabled: false } : p
+              p.id === pluginId ? { ...p, enabled: false } : p
             ),
             activePluginContexts: newContexts,
-            };
+          };
         });
         
         console.log(`🔌 Plugin deactivated: ${pluginId}`);
-       },
+      },
       
       togglePlugin: (pluginId, context) => {
         const plugin = get().plugins.find(p => p.id === pluginId);
@@ -125,7 +151,12 @@ export const usePluginsStore = create<PluginsState>()(
       },
       
       getPluginsByModule: (moduleId) => {
-        return get().plugins.filter(p => p.moduleId === moduleId);
+        const allPlugins = get().plugins;
+        const filtered = allPlugins.filter(p => p.moduleId === moduleId);
+        
+        console.log(`🔍 getPluginsByModule(${moduleId}): total=${allPlugins.length}, filtered=${filtered.length}`);
+        
+        return filtered;
       },
       
       getActivePluginsByModule: (moduleId) => {
@@ -191,17 +222,59 @@ export const usePluginsStore = create<PluginsState>()(
           }
         });
       },
+      
+      getWidgetsByModule: (moduleId) => {
+        const activePlugins = get().plugins.filter(p => p.moduleId === moduleId && p.enabled);
+        const widgets: IPluginWidget[] = [];
+        
+        activePlugins.forEach(plugin => {
+          if (plugin.widget) {
+            widgets.push({
+              ...plugin.widget,
+              pluginId: plugin.id,
+            });
+          }
+        });
+        
+        return widgets.sort((a, b) => (a.order || 999) - (b.order || 999));
+      },
     }),
     {
       name: 'plugins-storage',
+      // Сохраняем только то, что нужно
       partialize: (state) => ({
-        plugins: state.plugins.map(p => ({
+        pluginStates: state.plugins.map(p => ({
           id: p.id,
           enabled: p.enabled,
           settings: p.settings,
         })),
         pluginData: state.pluginData,
       }),
+      // Восстанавливаем плагины из реестра
+      onRehydrateStorage: () => (state) => {
+        if (state && globalPluginRegistry.length > 0) {
+          console.log('🔄 Rehydrating plugins from registry...');
+          
+          // Восстанавливаем плагины из глобального реестра
+          const restoredPlugins = globalPluginRegistry.map(plugin => {
+            const savedState = (state as any)?.pluginStates?.find((ps: any) => ps.id === plugin.id);
+            if (savedState) {
+              return {
+                ...plugin,
+                enabled: savedState.enabled,
+                settings: { ...plugin.settings, ...savedState.settings },
+              };
+            }
+            return plugin;
+          });
+          
+          // Обновляем состояние
+          setTimeout(() => {
+            usePluginsStore.setState({ plugins: restoredPlugins });
+            console.log(`✅ Rehydrated ${restoredPlugins.length} plugins`);
+          }, 0);
+        }
+      },
     }
   )
 );
