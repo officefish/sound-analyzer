@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/app.store';
 import { usePluginsStore } from '../../store/plugins.store';
 import { ModuleType } from '../../types/modules';
+import { Slider, Toggle, Card, Badge, Button } from '../ui';
 
 const PluginList: React.FC = () => {
   const { currentApp } = useAppStore();
@@ -9,6 +10,7 @@ const PluginList: React.FC = () => {
     getPluginsByModule, 
     togglePlugin, 
     updatePluginSettings,
+    //isPluginActive 
   } = usePluginsStore();
   
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
@@ -22,11 +24,11 @@ const PluginList: React.FC = () => {
         <div className="text-gray-400 text-xs uppercase tracking-wider mb-3 px-3">
           🔌 Плагины
         </div>
-        <div className="text-center text-gray-500 text-xs py-8 px-4">
+        <Card className="text-center py-8 px-4">
           <div className="text-3xl mb-2">🔌</div>
-          <p>Нет плагинов для этого модуля</p>
-          <p className="text-gray-600 mt-1">Плагины появятся позже</p>
-        </div>
+          <p className="text-gray-500 text-xs">Нет плагинов для этого модуля</p>
+          <p className="text-gray-600 text-xs mt-1">Плагины появятся позже</p>
+        </Card>
       </div>
     );
   }
@@ -35,24 +37,18 @@ const PluginList: React.FC = () => {
     <div className="space-y-3">
       <div className="text-gray-400 text-xs uppercase tracking-wider mb-3 px-3 flex justify-between items-center">
         <span>🔌 Плагины ({plugins.length})</span>
-        <span className="flex-shrink-0 text-[10px] text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
+        <Badge variant="info" size="sm">
           {activeCount} активны
-        </span>
+        </Badge>
       </div>
       
       {plugins.map((plugin) => {
         const isActive = plugin.enabled;
         
         return (
-          <div
+          <Card
             key={plugin.id}
-            className={`
-              rounded-xl transition-all duration-200 overflow-hidden
-              ${isActive 
-                ? 'bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/40' 
-                : 'bg-white/5 border border-white/10 hover:bg-white/10'
-              }
-            `}
+            variant={isActive ? 'active' : 'default'}
           >
             {/* Основная карточка плагина */}
             <div className="p-3">
@@ -73,9 +69,9 @@ const PluginList: React.FC = () => {
                       v{plugin.version}
                     </span>
                     {isActive && (
-                      <span className="flex-shrink-0 text-[10px] text-green-400 bg-green-500/20 px-1.5 py-0.5 rounded-full">
+                      <Badge variant="success" size="sm">
                         активен
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">
@@ -83,83 +79,81 @@ const PluginList: React.FC = () => {
                   </p>
                 </div>
                 
-                {/* Toggle Switch */}
-               <button
-                    onClick={() => {
-                        console.log(`📌 Toggling plugin: ${plugin.id}, current: ${plugin.enabled}`);
-                        togglePlugin(plugin.id);
-                    }}
-                    className={`
-                        flex-shrink-0 relative inline-flex h-5 w-9 rounded-full transition-colors duration-200
-                        ${isActive ? 'bg-indigo-500' : 'bg-gray-600'}
-                    `}
-                    ></button>
+                {/* Toggle Switch - кнопка активации плагина */}
+                <Toggle
+                  enabled={isActive}
+                  onChange={() => togglePlugin(plugin.id)}
+                  size="md"
+                />
               </div>
               
-              {/* Кнопка настроек (если есть) */}
+              {/* Кнопка раскрытия настроек (если есть настройки) */}
               {plugin.settings && Object.keys(plugin.settings).length > 0 && (
-                <button
+                <Button
                   onClick={() => setExpandedPlugin(expandedPlugin === plugin.id ? null : plugin.id)}
-                  className="w-full mt-2 text-center text-gray-500 text-xs py-1 hover:text-gray-300 transition-colors"
+                  variant="secondary"
+                  size="sm"
+                  className="w-full mt-2"
                 >
                   {expandedPlugin === plugin.id ? '▲ Скрыть настройки' : '▼ Настройки плагина'}
-                </button>
+                </Button>
               )}
             </div>
             
             {/* Панель настроек (расширенная) */}
             {expandedPlugin === plugin.id && plugin.settings && (
               <div className="px-3 pb-3 pt-0 border-t border-white/10 mt-1">
-                <div className="text-xs text-gray-400 mb-2 pt-2">⚙️ Настройки:</div>
-                <div className="space-y-2">
-                  {Object.entries(plugin.settings).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-400 capitalize">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}:
-                      </span>
-                      
-                      {typeof value === 'boolean' ? (
-                        <button
-                          onClick={() => updatePluginSettings(plugin.id, { [key]: !value })}
-                          className={`
-                            px-2 py-0.5 rounded text-xs transition-colors
-                            ${value ? 'bg-indigo-500/30 text-indigo-300' : 'bg-gray-600/50 text-gray-400'}
-                          `}
-                        >
-                          {value ? 'Вкл' : 'Выкл'}
-                        </button>
-                      ) : typeof value === 'number' && (key.includes('threshold') || key.includes('sensitivity')) ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="range"
-                            min={key === 'threshold' ? '0' : '0'}
-                            max={key === 'threshold' ? '1' : '100'}
-                            step="0.01"
-                            value={value}
-                            onChange={(e) => updatePluginSettings(plugin.id, { 
-                              [key]: key === 'threshold' ? parseFloat(e.target.value) : parseInt(e.target.value) 
-                            })}
-                            className="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                <div className="text-xs text-gray-400 mb-3 pt-2">⚙️ Настройки:</div>
+                <div className="space-y-3">
+                  {Object.entries(plugin.settings).map(([key, value]) => {
+                    // Форматируем название ключа для отображения
+                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    
+                    // Определяем единицу измерения
+                    let unit: 'percent' | 'ms' | 'db' | 'hz' = 'percent';
+                    if (key.includes('Time') || key.includes('Delay')) unit = 'ms';
+                    if (key.includes('Freq') || key.includes('Frequency')) unit = 'hz';
+                    if (key.includes('Gain') || key.includes('Volume')) unit = 'db';
+                    
+                    return (
+                      <div key={key}>
+                        {typeof value === 'boolean' ? (
+                          <Toggle
+                            enabled={value}
+                            onChange={(newValue) => updatePluginSettings(plugin.id, { [key]: newValue })}
+                            label={label}
+                            size="sm"
                           />
-                          <span className="text-gray-300 w-8 text-right">
-                            {typeof value === 'number' && value < 1 ? `${Math.round(value * 100)}%` : value}
-                          </span>
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          value={String(value)}
-                          onChange={(e) => {
-                            let newValue: any = e.target.value;
-                            if (typeof value === 'number') newValue = parseFloat(newValue) || 0;
-                            if (typeof value === 'boolean') newValue = newValue === 'true';
-                            updatePluginSettings(plugin.id, { [key]: newValue });
-                          }}
-                          className="bg-slate-800 text-white text-xs rounded px-2 py-1 w-24 text-right"
-                        />
-                      )}
-                    </div>
-                  ))}
+                        ) : typeof value === 'number' ? (
+                          <Slider
+                            value={value}
+                            onChange={(newValue) => updatePluginSettings(plugin.id, { [key]: newValue })}
+                            label={label}
+                            unit={unit}
+                            min={key.includes('threshold') || key.includes('sensitivity') || key.includes('reduction') ? 0 : 0}
+                            max={key.includes('threshold') || key.includes('sensitivity') || key.includes('reduction') ? 1 : 100}
+                            step={key.includes('threshold') || key.includes('sensitivity') || key.includes('reduction') ? 0.01 : 1}
+                            size="md"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 text-xs">{label}:</span>
+                            <input
+                              type="text"
+                              value={String(value)}
+                              onChange={(e) => {
+                                let newValue: any = e.target.value;
+                                if (typeof value === 'number') newValue = parseFloat(newValue) || 0;
+                                if (typeof value === 'boolean') newValue = newValue === 'true';
+                                updatePluginSettings(plugin.id, { [key]: newValue });
+                              }}
+                              className="w-32 bg-slate-800 text-white text-xs rounded px-2 py-1 border border-white/10 focus:border-indigo-500 focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 
                 {/* Информация о статусе плагина */}
@@ -167,26 +161,26 @@ const PluginList: React.FC = () => {
                   <div className="text-[10px] text-gray-500 flex justify-between">
                     <span>🆔 {plugin.id}</span>
                     {isActive ? (
-                      <span className="text-green-500">● активен</span>
+                      <Badge variant="success" size="sm">● активен</Badge>
                     ) : (
-                      <span className="text-gray-500">○ неактивен</span>
+                      <Badge variant="default" size="sm">○ неактивен</Badge>
                     )}
                   </div>
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         );
       })}
       
       {/* Подсказка */}
-      <div className="mt-4 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+      <Card variant="default" className="p-3 bg-indigo-500/10 border-indigo-500/20">
         <div className="text-indigo-300 text-xs font-medium mb-1">💡 О плагинах</div>
         <div className="text-gray-400 text-xs">
           Включайте плагины, чтобы расширить функциональность текущего модуля. 
           Каждый плагин добавляет новые возможности и настройки.
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

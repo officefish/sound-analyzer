@@ -17,7 +17,6 @@ const Stopwatch: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const lapCounterRef = useRef<number>(0);
-  const isInitializedRef = useRef(false);
   
   const {
     state,

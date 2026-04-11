@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Микрофон - Индикатор громкости</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            text-align: center;
+            padding: 2rem;
+            background: #1e1e2f;
+            color: white;
+        }
+        .meter {
+            width: 300px;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+        .meter-fill {
+            width: 0%;
+            height: 100%;
+            background: #4caf50;
+            transition: width 0.05s linear;
+        }
+        button {
+            background: #4caf50;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎤 Индикатор громкости</h1>
+    <button id="btn">Запросить доступ к микрофону</button>
+    <div class="meter">
+        <div class="meter-fill" id="fill"></div>
+    </div>
+    <div class="value">Громкость: <span id="volumeValue">0</span>%</div>
+    <div id="error" class="error"></div>
+
+    <script>
+        let audioContext = null;
+        let source = null;
+        let processor = null;
+        let stream = null;
+
+        const btn = document.getElementById('btn');
+        const fill = document.getElementById('fill');
+        const volumeSpan = document.getElementById('volumeValue');
+        const errorDiv = document.getElementById('error');
+
+        btn.addEventListener('click', async () => {
+            if (audioContext && audioContext.state !== 'closed') {
+                stopMicrophone();
+                btn.textContent = 'Запросить доступ к микрофону';
+                return;
+            }
+            await startMicrophone();
+        });
+
+        async function startMicrophone() {
+            try {
+                errorDiv.textContent = '';
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                source = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(2048, 1, 1);
+                
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                
+                processor.onaudioprocess = function(event) {
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    let sum = 0;
+                    for (let i = 0; i < inputData.length; i++) {
+                        sum += inputData[i] * inputData[i];
+                    }
+                    let rms = Math.sqrt(sum / inputData.length);
+                    let percent = Math.min(100, Math.floor(rms * 100));
+                    // плавная шкала: большинство звуков дают <0.5, сделаем чувствительнее
+                    percent = Math.min(100, Math.floor(rms * 200));
+                    
+                    fill.style.width = percent + '%';
+                    volumeSpan.textContent = percent;
+                    
+                    // меняем цвет при перегрузке
+                    if (percent > 85) {
+                        fill.style.background = '#f44336';
+                    } else if (percent > 60) {
+                        fill.style.background = '#ff9800';
+                    } else {
+                        fill.style.background = '#4caf50';
+                    }
+                };
+                
+                audioContext.resume();
+                btn.textContent = 'Остановить микрофон';
+                
+            } catch (err) {
+                console.error(err);
+                errorDiv.textContent = 'Ошибка: ' + (err.message || 'Не удалось получить доступ к микрофону');
+            }
+        }
+        
+        function stopMicrophone() {
+            if (processor) {
+                processor.disconnect();
+                processor.onaudioprocess = null;
+            }
+            if (source) source.disconnect();
+            if (audioContext) audioContext.close();
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            audioContext = null;
+            source = null;
+            processor = null;
+            stream = null;
+            
+            fill.style.width = '0%';
+            volumeSpan.textContent = '0';
+        }
+    </script>
+</body>
+</html>

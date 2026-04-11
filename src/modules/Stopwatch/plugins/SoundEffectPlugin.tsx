@@ -1,4 +1,6 @@
-import { IPlugin, IPluginContext } from '../../../types/plugins';
+import { IPlugin
+   // , IPluginContext
+ } from '../../../types/plugins';
 
 class SoundEffectPluginClass implements IPlugin {
   id = 'stopwatch-sound-effects';
@@ -70,7 +72,9 @@ class SoundEffectPluginClass implements IPlugin {
     return durations[action] || 0.2;
   }
   
-  onModuleEvent(event: string, data: any, context?: IPluginContext): void {
+  onModuleEvent(event: string
+   // , data: any, context?: IPluginContext
+ ): void {
     const soundOnMap: Record<string, boolean> = {
       start: this.settings.soundOnStart || false,
       pause: this.settings.soundOnPause || false,
@@ -125,7 +129,9 @@ class SoundEffectPluginClass implements IPlugin {
     }
   }
   
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string, data?: any
+    //, context?: IPluginContext
+): any {
     switch (action) {
       case 'test':
         return this.testSound();

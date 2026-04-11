@@ -3,6 +3,8 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
     "./electron/**/*.{js,ts}",
+    'node_modules/daisyui/dist/**/*.js',
+    'node_modules/react-daisyui/dist/**/*.js',
   ],
   theme: {
     extend: {
@@ -20,5 +22,7 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [
+    require("daisyui"),
+  ],
 }

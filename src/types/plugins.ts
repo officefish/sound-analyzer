@@ -1,5 +1,4 @@
 import { ModuleType } from './modules';
-import { ReactNode } from 'react';
 
 // Тип для функции-обработчика
 export type PluginHandler = (...args: any[]) => any;

@@ -15,7 +15,7 @@ const Sidebar: React.FC = () => {
       <div className="flex-shrink-0 p-6 border-b border-white/10">
         <h1 className="text-white text-xl font-bold flex items-center gap-2">
           <span>🎵</span>
-          <span>SoundLab</span>
+          <span>Membrana</span>
         </h1>
         <p className="text-gray-500 text-xs mt-1">v2.0.0</p>
       </div>

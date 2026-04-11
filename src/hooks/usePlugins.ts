@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { usePluginsStore } from '../store/plugins.store';
-import { IPluginContext, IPlugin } from '../types/plugins';
+import { IPluginContext } from '../types/plugins';
 import { ModuleType } from '../types/modules';
 
 export const usePlugins = (moduleId: ModuleType, context?: IPluginContext) => {

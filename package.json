@@ -2,8 +2,7 @@
   "name": "stopwatch-react-tailwind",
   "version": "1.0.0",
   "description": "Секундомер на Electron + React + TypeScript + TailwindCSS",
-  "main": "electron/main.js",
-  "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -11,7 +10,11 @@
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:start\"",
     "electron:start": "cross-env NODE_ENV=development electron .",
     "electron:build": "npm run build && electron-builder",
-    "build:installer": "npm run build && electron-builder"
+    "build:installer": "npm run build && electron-builder",
+    "build:electron": "tsc --project tsconfig.electron.json",
+    "build:react": "vite build",
+    "dist": "npm run build:electron && npm run build && electron-builder",
+    "dist:win": "npm run build:electron && npm run build && electron-builder --win"
   },
   "author": "Your Name",
   "license": "MIT",
@@ -34,7 +37,9 @@
     "wait-on": "^7.2.0"
   },
   "dependencies": {
+    "daisyui": "^5.5.19",
     "react": "^18.2.0",
+    "react-daisyui": "^5.0.5",
     "react-dom": "^18.2.0",
     "zustand": "^5.0.12"
   },
@@ -46,7 +51,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "dist-electron/**/*"
     ],
     "win": {
       "target": "nsis",

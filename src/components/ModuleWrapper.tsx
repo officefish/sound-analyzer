@@ -8,7 +8,7 @@ interface ModuleWrapperProps {
 }
 
 export const ModuleWrapper: React.FC<ModuleWrapperProps> = ({ 
-  moduleId, 
+  //moduleId, 
   onContextReady, 
   children 
 }) => {

@@ -9,7 +9,9 @@ const LapHistoryWidget: React.FC<{
   context?: IPluginContext;
   onAction: (action: string, data?: any) => void;
   isActive: boolean;
-}> = ({ plugin, context, onAction, isActive }) => {
+}> = ({ 
+  //plugin, context, 
+  onAction, isActive }) => {
   const [history, setHistory] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
   
@@ -165,7 +167,9 @@ class LapHistoryPluginClass implements IPlugin {
     return this.getHistory().length;
   }
   
-  onModuleEvent(event: string, data: any, context?: IPluginContext): void {
+  onModuleEvent(event: string, data: any
+    //, context?: IPluginContext
+  ): void {
     switch (event) {
       case 'lap':
         if (data?.lap) {
@@ -180,15 +184,21 @@ class LapHistoryPluginClass implements IPlugin {
     }
   }
   
-  onActivate(context?: IPluginContext): void {
+  onActivate(
+    //context?: IPluginContext
+  ): void {
     console.log('📊 Lap History Plugin activated');
   }
   
-  onDeactivate(context?: IPluginContext): void {
+  onDeactivate(
+    //context?: IPluginContext
+  ): void {
     console.log('📊 Lap History Plugin deactivated');
   }
   
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string
+    //, data?: any, context?: IPluginContext
+  ): any {
     switch (action) {
       case 'export':
         return this.exportHistory();

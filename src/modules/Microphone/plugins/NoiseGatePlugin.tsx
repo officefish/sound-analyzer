@@ -1,4 +1,6 @@
-import { IPlugin, IPluginContext } from '../../../types/plugins';
+import { IPlugin
+    //, IPluginContext 
+} from '../../../types/plugins';
 
 class NoiseGatePluginClass implements IPlugin {
   id = 'microphone-noise-gate';
@@ -52,7 +54,9 @@ class NoiseGatePluginClass implements IPlugin {
     this.isGateOpenFlag = false;
   }
   
-  onModuleEvent(event: string, data: any, context?: IPluginContext): void {
+  onModuleEvent(event: string, data: any
+    //, context?: IPluginContext
+  ): void {
     if (event === 'audioFrame' && data?.volume !== undefined) {
       const processed = this.processAudio(data.volume);
       if (data.onProcessed) {
@@ -71,7 +75,9 @@ class NoiseGatePluginClass implements IPlugin {
     this.resetState();
   }
   
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string, data?: any
+    //, context?: IPluginContext
+  ): any {
     switch (action) {
       case 'process':
         return this.processAudio(data?.volume || 0);

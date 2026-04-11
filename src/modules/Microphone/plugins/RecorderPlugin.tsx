@@ -1,4 +1,6 @@
-import { IPlugin, IPluginContext } from '../../../types/plugins';
+import { IPlugin
+    //, IPluginContext 
+} from '../../../types/plugins';
 
 class RecorderPluginClass implements IPlugin {
   id = 'microphone-recorder';
@@ -134,7 +136,9 @@ class RecorderPluginClass implements IPlugin {
     this.currentStream = stream;
   }
   
-  onModuleEvent(event: string, data: any, context?: IPluginContext): void {
+  onModuleEvent(event: string, data: any
+    //, context?: IPluginContext
+  ): void {
     switch (event) {
       case 'streamAvailable':
         if (data?.stream) {
@@ -162,7 +166,9 @@ class RecorderPluginClass implements IPlugin {
     this.resetState();
   }
   
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string, data?: any
+    //, context?: IPluginContext
+  ): any {
     switch (action) {
       case 'start':
         return this.startRecording(data?.stream);
