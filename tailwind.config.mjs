@@ -25,4 +25,12 @@ export default {
   plugins: [
     require("daisyui"),
   ],
+  daisyui: {
+    themes: ["dark"], // ✅ Явно указываем только тёмную тему
+    darkTheme: "dark", // ✅ Указываем тему по умолчанию
+    base: true, // ✅ Применяем базовые стили daisyui
+    styled: true, // ✅ Применяем стили компонентов
+    utils: true, // ✅ Включаем утилиты
+    logs: false, // ✅ Отключаем логи в консоли
+  },
 }

@@ -24,29 +24,33 @@ const App: React.FC = () => {
   const CurrentComponent = moduleComponents[currentApp];
   
   return (
-    <div className="h-screen flex overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <Sidebar />
-      
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Header />
+    <div data-theme="dark" className="min-h-screen bg-base-300">
+      <div className="h-screen flex overflow-hidden">
+        {/* Sidebar - фиксированная ширина */}
+        <Sidebar />
         
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-2xl mx-auto py-6 px-6">
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/10 overflow-hidden">
-              <Suspense fallback={
-                <div className="flex items-center justify-center h-64">
-                  <div className="text-gray-400">Загрузка...</div>
-                </div>
-              }>
-                <CurrentComponent />
-              </Suspense>
+        {/* Основная область */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <Header />
+          
+          <main className="flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto py-6 px-6">
+              <div className="bg-base-200/50 backdrop-blur-lg rounded-2xl shadow-2xl border border-base-100 overflow-hidden">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-base-content/50">Загрузка...</div>
+                  </div>
+                }>
+                  <CurrentComponent />
+                </Suspense>
+              </div>
+              
+              <div className="mt-6">
+                <Footer />
+              </div>
             </div>
-            
-            <div className="mt-6">
-              <Footer />
-            </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );
