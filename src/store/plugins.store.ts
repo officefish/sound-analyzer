@@ -186,6 +186,7 @@ export const usePluginsStore = create<PluginsState>()(
         const results: any[] = [];
         activePlugins.forEach(plugin => {
           const context = get().activePluginContexts.get(plugin.id);
+          console.log(plugin)
           const result = plugin.execute(action, data, context);
           if (result !== undefined && result !== null) {
             results.push(result);

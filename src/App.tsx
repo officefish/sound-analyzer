@@ -8,16 +8,19 @@ import Footer from './components/Layout/Footer';
 // Ленивая загрузка модулей
 const Stopwatch = lazy(() => import('./modules/Stopwatch'));
 const Microphone = lazy(() => import('./modules/Microphone'));
+const Microphone2 = lazy(() => import('./modules/Microphone2'));
 
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
   stopwatch: Stopwatch,
   microphone: Microphone,
+  microphone2: Microphone2,
 };
 
 // Обновляем MODULES с реальными компонентами
 MODULES[0].component = Stopwatch;
 MODULES[1].component = Microphone;
+MODULES[2].component = Microphone2;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();
@@ -26,28 +29,22 @@ const App: React.FC = () => {
   return (
     <div data-theme="dark" className="min-h-screen bg-base-300">
       <div className="h-screen flex overflow-hidden">
-        {/* Sidebar - фиксированная ширина */}
         <Sidebar />
         
-        {/* Основная область */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header />
           
           <main className="flex-1 overflow-y-auto">
-            <div className="max-w-2xl mx-auto py-6 px-6">
-              <div className="bg-base-200/50 backdrop-blur-lg rounded-2xl shadow-2xl border border-base-100 overflow-hidden">
-                <Suspense fallback={
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-base-content/50">Загрузка...</div>
-                  </div>
-                }>
-                  <CurrentComponent />
-                </Suspense>
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-64">
+                <div className="text-base-content/50">Загрузка...</div>
               </div>
-              
-              <div className="mt-6">
-                <Footer />
-              </div>
+            }>
+              <CurrentComponent />
+            </Suspense>
+            
+            <div className="mt-6 px-6 pb-6">
+              <Footer />
             </div>
           </main>
         </div>

@@ -5,6 +5,7 @@ import { RecorderPlugin } from '../modules/Microphone/plugins/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
 // src/plugins/index.ts
 
+import { TuneMonitorPlugin } from '../modules/Microphone2/plugins/TuneMonitorPlugin'; // ✅ Добавляем
 import { IPlugin } from '../types/plugins';
 
 // Список всех оригинальных плагинов
@@ -13,6 +14,7 @@ export const ALL_PLUGINS: IPlugin[] = [
   SoundEffectPlugin,
   NoiseGatePlugin,
   RecorderPlugin,
+  TuneMonitorPlugin, // ✅ Добавляем
 ];
 
 // Сохраняем оригинальные плагины в глобальный реестр
@@ -23,7 +25,7 @@ ALL_PLUGINS.forEach((plugin: IPlugin) => {
   console.log(`📋 Plugin registered: ${plugin.id} (${plugin.moduleId})`);
 });
 
-// Функция для инициализации (ничего не делает, просто для совместимости)
+// Функция для инициализации
 export const registerAllPlugins = () => {
   console.log('✅ Plugin registry ready, plugins available:', ALL_PLUGINS.length);
 };
@@ -33,4 +35,5 @@ export {
   SoundEffectPlugin,
   NoiseGatePlugin,
   RecorderPlugin,
+  TuneMonitorPlugin,
 };

@@ -1,28 +1,35 @@
-export type ModuleType = 'stopwatch' | 'microphone';
+import { IPluginContext } from './plugins';
 
-// Интерфейс модуля
+export type ModuleType = 'stopwatch' | 'microphone' | 'microphone2';
+
 export interface IModule {
   id: ModuleType;
   name: string;
   icon: string;
   description: string;
-  component: React.ComponentType;
+  component: React.ComponentType<{ onContextReady?: (context: IPluginContext) => void }>;
 }
 
-// Список доступных модулей (будет заполнен позже, чтобы избежать циклических зависимостей)
 export const MODULES: IModule[] = [
   {
     id: 'stopwatch',
     name: 'Секундомер',
     icon: '⏱',
     description: 'Измерение времени с кругами',
-    component: () => null, // Заглушка, реальный компонент подставится в App.tsx
+    component: () => null,
   },
   {
     id: 'microphone',
     name: 'Микрофон',
     icon: '🎤',
     description: 'Анализ звука с микрофона',
-    component: () => null, // Заглушка
+    component: () => null,
+  },
+  {
+    id: 'microphone2',
+    name: 'MicMonitor',
+    icon: '🎧',
+    description: 'Современный монитор микрофона',
+    component: () => null,
   },
 ];

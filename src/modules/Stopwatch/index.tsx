@@ -33,6 +33,10 @@ const Stopwatch: React.FC = () => {
       laps: [],
     }),
   });
+
+   useEffect(() => {
+      console.log('activePlugins.length: ' + activePlugins.length)
+    }, [activePlugins])
   
   const { elapsedTime, isRunning, laps } = state;
   
