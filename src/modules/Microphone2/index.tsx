@@ -175,7 +175,7 @@ const Microphone2: React.FC = () => {
               </svg>
             </div>
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">
-              MicMonitor
+              Microphone
             </h1>
           </div>
           <p className="text-sm text-[hsl(210,15%,50%)]">
