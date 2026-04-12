@@ -61,7 +61,9 @@ class TuneMonitorPluginClass implements IPlugin {
   widget = tuneMonitorWidget;
   
   // ✅ Добавляем метод execute
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string, data?: any
+    //, context?: IPluginContext
+  ): any {
     console.log(`🎵 TuneMonitor execute: ${action}`, data);
     
     switch (action) {

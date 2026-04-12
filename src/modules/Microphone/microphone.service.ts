@@ -56,6 +56,9 @@ export class MicrophoneService {
   
   // Запуск записи
   public async startRecording(deviceId?: string): Promise<boolean> {
+    
+    console.log(`Microphone service startRecoding called`)
+    
     if (this.isRecordingFlag) {
       console.log('Already recording, ignoring start');
       return false;
