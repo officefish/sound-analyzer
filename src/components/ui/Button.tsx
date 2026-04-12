@@ -1,9 +1,11 @@
+// src/components/ui/Button.tsx
+
 import React from 'react';
 
 interface ButtonProps {
   onClick: () => void;
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
+  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   icon?: string;
@@ -20,12 +22,12 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
 }) => {
   const variantClasses = {
-    primary: 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/30',
-    secondary: 'bg-gray-600 hover:bg-gray-500 shadow-lg shadow-gray-900/30',
-    success: 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-900/30',
-    danger: 'bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-900/30',
-    warning: 'bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-900/30',
-    info: 'bg-sky-600 hover:bg-sky-500 shadow-lg shadow-sky-900/30',
+    primary: 'bg-primary hover:bg-primary/80 text-primary-content shadow-lg shadow-primary/20',
+    secondary: 'bg-secondary hover:bg-secondary/80 text-secondary-content shadow-lg shadow-secondary/20',
+    success: 'bg-success hover:bg-success/80 text-success-content shadow-lg shadow-success/20',
+    danger: 'bg-error hover:bg-error/80 text-error-content shadow-lg shadow-error/20',
+    warning: 'bg-warning hover:bg-warning/80 text-warning-content shadow-lg shadow-warning/20',
+    ghost: 'bg-transparent hover:bg-base-200 text-base-content border border-base-300',
   };
   
   const sizeClasses = {
@@ -39,7 +41,7 @@ const Button: React.FC<ButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={`
-        font-medium rounded-lg transition-all duration-200
+        font-medium rounded-xl transition-all duration-200
         ${variantClasses[variant]}
         ${sizeClasses[size]}
         disabled:opacity-50 disabled:cursor-not-allowed

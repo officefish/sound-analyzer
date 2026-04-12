@@ -1,3 +1,5 @@
+// src/components/ui/Badge.tsx
+
 import React from 'react';
 
 interface BadgeProps {
@@ -12,21 +14,21 @@ const Badge: React.FC<BadgeProps> = ({
   size = 'sm' 
 }) => {
   const variantClasses = {
-    success: 'bg-green-500/20 text-green-400',
-    warning: 'bg-yellow-500/20 text-yellow-400',
-    danger: 'bg-red-500/20 text-red-400',
-    info: 'bg-indigo-500/20 text-indigo-400',
-    default: 'bg-gray-500/20 text-gray-400',
+    success: 'bg-success/20 text-success',
+    warning: 'bg-warning/20 text-warning',
+    danger: 'bg-error/20 text-error',
+    info: 'bg-primary/20 text-primary',
+    default: 'bg-base-300 text-base-content/70',
   };
   
   const sizeClasses = {
-    sm: 'px-1.5 py-0.5 text-[10px]',
-    md: 'px-2 py-1 text-xs',
+    sm: 'px-2 py-0.5 text-[10px]',
+    md: 'px-3 py-1 text-xs',
   };
   
   return (
     <span className={`
-      rounded-full font-medium
+      inline-flex items-center gap-1 rounded-full font-medium
       ${variantClasses[variant]}
       ${sizeClasses[size]}
     `}>
