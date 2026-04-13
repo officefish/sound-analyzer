@@ -1,7 +1,7 @@
 import { LapHistoryPlugin } from '../modules/Stopwatch/plugins/LapHistoryPlugin';
 import { SoundEffectPlugin } from '../modules/Stopwatch/plugins/SoundEffectPlugin';
 import { NoiseGatePlugin } from '../modules/Microphone/plugins/NoiseGatePlugin';
-import { RecorderPlugin } from '../modules/Microphone/plugins/RecorderPlugin';
+import { RecorderPlugin } from '../modules/Microphone/plugins/recorder/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
 // src/plugins/index.ts
 

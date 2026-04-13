@@ -18,7 +18,6 @@ const INITIAL_STATE: MicrophoneState = {
   audioDevices: [],
   selectedDeviceId: '',
   recordingDuration: 0,
-  // ❌ Удаляем qualityScore, snr, noise, waveformData, spectrumData
 };
 
 const Microphone: React.FC = () => {
@@ -32,7 +31,12 @@ const Microphone: React.FC = () => {
     stateRef.current = state;
   }, [state]);
   
-  // ✅ Передаём только сырые данные
+  // ✅ Функция для получения потока из сервиса
+  const getStream = useCallback(() => {
+    return serviceRef.current?.getStream() || null;
+  }, []);
+  
+  // Передаём только сырые данные
   const pluginContext: IPluginContext = {
     moduleId: MODULE_ID as any,
     moduleState: state,
@@ -55,10 +59,13 @@ const Microphone: React.FC = () => {
       setState(prev => ({ ...prev, ...data }));
     },
     
-    // ✅ Только сырые данные от микрофона
+    // Только сырые данные от микрофона
     rawVolume: state.rawVolume,
     processedVolume: state.processedVolume,
     isRecording: state.isRecording,
+
+    // ✅ Добавляем функцию для получения потока
+    getStream,
   };
   
   const {
@@ -89,6 +96,12 @@ const Microphone: React.FC = () => {
       service.on('onRecordingStart', () => {
         setState(prev => ({ ...prev, isRecording: true, error: null }));
         emitEvent('recordingStarted');
+        
+        // ✅ Отправляем событие с потоком для плагинов
+        const stream = service.getStream();
+        if (stream) {
+          emitEvent('streamAvailable', { stream });
+        }
       });
       
       service.on('onRecordingStop', (duration) => {
@@ -194,9 +207,7 @@ const Microphone: React.FC = () => {
           isRecording={isRecording}
         />
         
-        {activePlugins.length > 0 && 
-        //isRecording && 
-        (
+        {activePlugins.length > 0 && (
           <div className="space-y-4">
             {widgets.map((widget) => {
               const plugin = activePlugins.find(p => p.id === widget.pluginId);

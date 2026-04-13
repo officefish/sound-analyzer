@@ -105,9 +105,23 @@ export const usePluginsStore = create<PluginsState>()(
             if (enriched) plugins.push(enriched);
           }
         }
-        console.log(`🔍 getPluginsByModule(${moduleId}): found ${plugins.length} plugins`);
+        
+        //console.log(`🔍 getPluginsByModule(${moduleId}): found ${plugins.length} plugins`);
+        
         return plugins;
       },
+
+//       getPluginsByModule: (moduleId) => {
+//   const plugins = globalPluginRegistry
+//     .filter(p => p.moduleId === moduleId)
+//     .map(p => getPluginWithState(p.id, get().pluginStates)!)
+//     .filter(p => p !== undefined);
+  
+//   // ❌ Убираем или делаем реже этот лог
+//   // console.log(`🔍 getPluginsByModule(${moduleId}): found ${plugins.length} plugins`);
+  
+//   return plugins;
+// },
       
       getActivePluginsByModule: (moduleId) => {
         return get().getPluginsByModule(moduleId).filter(p => p.enabled);

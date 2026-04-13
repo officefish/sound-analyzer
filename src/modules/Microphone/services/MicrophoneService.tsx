@@ -217,4 +217,9 @@ export class MicrophoneService {
     
     updateVolume();
   }
+
+  // ✅ Добавляем метод для получения потока
+  public getStream(): MediaStream | null {
+    return this.mediaStream;
+  }
 }
