@@ -1,4 +1,4 @@
-import { MicrophoneState, MicrophoneServiceEvents } from './types';
+import { MicrophoneState, MicrophoneServiceEvents } from '../types';
 
 export class MicrophoneService {
   private mediaStream: MediaStream | null = null;

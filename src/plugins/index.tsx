@@ -5,16 +5,16 @@ import { RecorderPlugin } from '../modules/Microphone/plugins/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
 // src/plugins/index.ts
 
-import { TuneMonitorPlugin } from '../modules/Microphone2/plugins/TuneMonitorPlugin'; // ✅ Добавляем
+import { TuneMonitorPlugin } from '../modules/Microphone/plugins/TuneMonitorPlugin'; // ✅ Добавляем
 import { IPlugin } from '../types/plugins';
 
 // Список всех оригинальных плагинов
 export const ALL_PLUGINS: IPlugin[] = [
   LapHistoryPlugin,
   SoundEffectPlugin,
-  NoiseGatePlugin,
   RecorderPlugin,
-  TuneMonitorPlugin, // ✅ Добавляем
+  NoiseGatePlugin,
+  TuneMonitorPlugin, 
 ];
 
 // Сохраняем оригинальные плагины в глобальный реестр

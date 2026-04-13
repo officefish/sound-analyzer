@@ -7,20 +7,19 @@ import Footer from './components/Layout/Footer';
 
 // Ленивая загрузка модулей
 const Stopwatch = lazy(() => import('./modules/Stopwatch'));
+//const Microphone = lazy(() => import('./modules/Microphone'));
 const Microphone = lazy(() => import('./modules/Microphone'));
-const Microphone2 = lazy(() => import('./modules/Microphone2'));
 
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
   stopwatch: Stopwatch,
+  //microphone: Microphone,
   microphone: Microphone,
-  microphone2: Microphone2,
 };
 
 // Обновляем MODULES с реальными компонентами
 MODULES[0].component = Stopwatch;
 MODULES[1].component = Microphone;
-MODULES[2].component = Microphone2;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();

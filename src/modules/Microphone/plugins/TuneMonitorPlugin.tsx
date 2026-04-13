@@ -170,7 +170,7 @@ class TuneMonitorPluginClass implements IPlugin {
   version = '1.0.0';
   description = 'Визуализация звука: громкость, качество, волна и спектр';
   icon = '🎵';
-  moduleId = 'microphone2' as const;
+  moduleId = 'microphone' as const;
   enabled = false;
   
   availableActions = ['setWidgetState', 'getWidgetState', 'resetWidgets'];

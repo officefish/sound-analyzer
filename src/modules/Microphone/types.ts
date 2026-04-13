@@ -12,8 +12,9 @@ export interface MicrophoneServiceEvents {
   onVolumeUpdate?: (rawVolume: number, processedVolume: number) => void;
   onRecordingStart?: () => void;
   onRecordingStop?: (duration: number) => void;
-  onDurationUpdate?: (duration: number) => void;  // ✅ Новое событие
+  onDurationUpdate?: (duration: number) => void;
   onError?: (error: string | null) => void;
   onDevicesUpdate?: (devices: MediaDeviceInfo[]) => void;
   onDeviceChange?: (deviceId: string) => void;
+  onQualityUpdate?: (quality: number, snr: number, noise: number) => void;
 }

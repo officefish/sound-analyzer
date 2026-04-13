@@ -1,12 +1,15 @@
+// src/modules/Microphone2/index.tsx
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Button } from 'react-daisyui';
 import { useModulePlugins } from '../../hooks/useModulePlugins';
-import { MicrophoneService } from './microphone.service';
-import VolumeWidget from './components/VolumeWidget';
+import { MicrophoneService } from './services/MicrophoneService';
 import DeviceSelector from './components/DeviceSelector';
 import { MicrophoneState } from './types';
+import { IPluginContext } from '../../types/plugins';
+import ModuleHeader from '../../components/ui/ModuleHeader';
 
-// Начальное состояние
+const MODULE_ID = 'microphone';
+
 const INITIAL_STATE: MicrophoneState = {
   isRecording: false,
   rawVolume: 0,
@@ -15,31 +18,61 @@ const INITIAL_STATE: MicrophoneState = {
   audioDevices: [],
   selectedDeviceId: '',
   recordingDuration: 0,
+  // ❌ Удаляем qualityScore, snr, noise, waveformData, spectrumData
 };
 
 const Microphone: React.FC = () => {
-  // Состояние
   const [state, setState] = useState<MicrophoneState>(INITIAL_STATE);
   
   const serviceRef = useRef<MicrophoneService | null>(null);
   const isInitializedRef = useRef(false);
+  const stateRef = useRef(state);
   
-  // Подключаем плагины
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+  
+  // ✅ Передаём только сырые данные
+  const pluginContext: IPluginContext = {
+    moduleId: MODULE_ID as any,
+    moduleState: state,
+    dispatch: (action: string, payload?: any) => {
+      console.log(`[Microphone2] Dispatch ${action}`, payload);
+      switch (action) {
+        case 'startMonitoring':
+          handleStartMonitoring();
+          break;
+        case 'stopMonitoring':
+          handleStopMonitoring();
+          break;
+        case 'changeDevice':
+          if (payload?.deviceId) handleDeviceChange(payload.deviceId);
+          break;
+      }
+    },
+    getData: () => stateRef.current,
+    setData: (data: any) => {
+      setState(prev => ({ ...prev, ...data }));
+    },
+    
+    // ✅ Только сырые данные от микрофона
+    rawVolume: state.rawVolume,
+    processedVolume: state.processedVolume,
+    isRecording: state.isRecording,
+  };
+  
   const {
     activePlugins,
     widgets,
     emitEvent,
     executeOnPlugins,
   } = useModulePlugins<MicrophoneState>({
-    moduleId: 'microphone',
+    moduleId: MODULE_ID as any,
     getInitialState: () => INITIAL_STATE,
   });
   
-  // Создаём сервис синхронно
   const getService = useCallback(() => {
     if (!serviceRef.current) {
-      console.log('🔧 Creating MicrophoneService...');
-      
       const service = new MicrophoneService((volume) => {
         const results = executeOnPlugins('processAudioFrame', { volume });
         if (results.length > 0 && results[0] !== null && typeof results[0] === 'number') {
@@ -48,20 +81,17 @@ const Microphone: React.FC = () => {
         return volume;
       });
       
-      // Подписываемся на события сервиса
       service.on('onVolumeUpdate', (rawVolume, processedVolume) => {
         setState(prev => ({ ...prev, rawVolume, processedVolume }));
         emitEvent('volumeUpdate', { rawVolume, processedVolume });
       });
       
       service.on('onRecordingStart', () => {
-        console.log('🎤 Recording started event');
         setState(prev => ({ ...prev, isRecording: true, error: null }));
         emitEvent('recordingStarted');
       });
       
       service.on('onRecordingStop', (duration) => {
-        console.log('⏹️ Recording stopped event, duration:', duration);
         setState(prev => ({ ...prev, isRecording: false, recordingDuration: duration }));
         emitEvent('recordingStopped', { duration });
       });
@@ -75,12 +105,10 @@ const Microphone: React.FC = () => {
       });
       
       service.on('onDevicesUpdate', (devices) => {
-        console.log('🎛️ Devices update received:', devices.length);
         setState(prev => ({ ...prev, audioDevices: devices }));
       });
       
       service.on('onDeviceChange', (deviceId) => {
-        console.log('🎛️ Device change event:', deviceId);
         setState(prev => ({ ...prev, selectedDeviceId: deviceId }));
       });
       
@@ -89,27 +117,22 @@ const Microphone: React.FC = () => {
     return serviceRef.current;
   }, [emitEvent, executeOnPlugins]);
   
-  // Инициализация сервиса и загрузка устройств после монтирования
   useEffect(() => {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
     
     const service = getService();
-    console.log('🎤 Initializing microphone, loading devices...');
-    
     service.getAudioDevices().then(devices => {
-      console.log('📋 Devices loaded:', devices.length);
       if (devices.length > 0) {
-        setState(prev => ({ 
-          ...prev, 
+        setState(prev => ({
+          ...prev,
           audioDevices: devices,
-          selectedDeviceId: devices[0].deviceId 
+          selectedDeviceId: devices[0].deviceId
         }));
       }
     });
     
     return () => {
-      console.log('🧹 Cleaning up microphone service');
       if (serviceRef.current) {
         serviceRef.current.dispose();
         serviceRef.current = null;
@@ -117,183 +140,80 @@ const Microphone: React.FC = () => {
     };
   }, [getService]);
   
-  // Обновляем обработчик звука при изменении плагинов
-  useEffect(() => {
-    if (serviceRef.current) {
-      serviceRef.current.setAudioProcessor((volume) => {
-        const results = executeOnPlugins('processAudioFrame', { volume });
-        if (results.length > 0 && results[0] !== null && typeof results[0] === 'number') {
-          return results[0];
-        }
-        return volume;
-      });
-    }
-  }, [executeOnPlugins]);
-  
-  // Обработчики
-  const handleStartRecording = useCallback(async () => {
-    console.log('🎤 handleStartRecording called, current isRecording:', state.isRecording);
-    
-    if (state.isRecording) {
-      console.log('⚠️ Already recording, ignoring start');
-      return;
-    }
-    
+  const handleStartMonitoring = useCallback(async () => {
     const service = getService();
-    if (!service) {
-      console.error('❌ Service not available');
-      return;
-    }
-    
-    console.log('🎤 Starting recording with device:', state.selectedDeviceId);
-    const success = await service.startRecording(state.selectedDeviceId || undefined);
-    
-    if (success) {
-      console.log('✅ Recording started successfully');
-    } else {
-      console.error('❌ Failed to start recording');
-    }
-  }, [state.isRecording, state.selectedDeviceId, getService]);
+    if (!service) return;
+    await service.startRecording(state.selectedDeviceId || undefined);
+  }, [state.selectedDeviceId, getService]);
   
-  const handleStopRecording = useCallback(() => {
-    console.log('⏹️ handleStopRecording called, current isRecording:', state.isRecording);
-    
-    if (!state.isRecording) {
-      console.log('⚠️ Not recording, ignoring stop');
-      return;
-    }
-    
+  const handleStopMonitoring = useCallback(() => {
     const service = getService();
-    if (!service) {
-      console.error('❌ Service not available');
-      return;
-    }
-    
-    console.log('⏹️ Stopping recording');
+    if (!service) return;
     service.stopRecording();
-  }, [state.isRecording, getService]);
+  }, [getService]);
   
   const handleDeviceChange = useCallback(async (deviceId: string) => {
-    console.log('🎛️ handleDeviceChange called:', deviceId);
     const service = getService();
-    if (!service) {
-      console.error('❌ Service not available');
-      return;
-    }
+    if (!service) return;
     setState(prev => ({ ...prev, selectedDeviceId: deviceId }));
     await service.changeDevice(deviceId);
   }, [getService]);
   
-  const { isRecording, rawVolume, processedVolume, error, audioDevices, selectedDeviceId, recordingDuration } = state;
-  
-  // Контекст для виджетов плагинов
-  const widgetContext = {
-    isRecording,
-    rawVolume,
-    processedVolume,
-    duration: recordingDuration,
-  };
+  const { isRecording, audioDevices, selectedDeviceId, error } = state;
   
   return (
-    <div className="p-6 space-y-4">
-      {/* Виджет громкости */}
-      <VolumeWidget
-        rawVolume={rawVolume}
-        processedVolume={processedVolume}
-        isRecording={isRecording}
-        recordingDuration={recordingDuration}
-      />
-      
-      {/* Ошибка */}
-      {error && (
-        <div className="alert alert-error shadow-lg">
-          <span>❌ {error}</span>
-        </div>
-      )}
-      
-      {/* Кнопки управления */}
-      <div className="grid grid-cols-2 gap-3">
-        <Button
-          onClick={handleStartRecording}
-          disabled={isRecording}
-          color="success"
-          size="md"
-          fullWidth
-          startIcon="🎙️"
-        >
-          Включить
-        </Button>
-        <Button
-          onClick={handleStopRecording}
-          disabled={!isRecording}
-          color="error"
-          size="md"
-          fullWidth
-          startIcon="⏹️"
-        >
-          Выключить
-        </Button>
-      </div>
-      
-      {/* Выбор устройства */}
-      <DeviceSelector
-        devices={audioDevices}
-        selectedDeviceId={selectedDeviceId}
-        onDeviceChange={handleDeviceChange}
-        disabled={isRecording}
-      />
-      
-      {/* Виджеты плагинов */}
-      {widgets.length > 0 && (
-        <div className="divider text-xs text-base-content/50">🔌 Плагины</div>
-      )}
-      
-      {widgets.map((widget) => {
-        const plugin = activePlugins.find(p => p.id === widget.pluginId);
-        if (!plugin) return null;
-        return (
-          <div key={widget.id} className="card bg-base-200 shadow-xl">
-            {widget.title && (
-              <div className="card-header p-3 border-b border-base-300">
-                <div className="flex items-center gap-2">
-                  {widget.icon && <span className="text-sm">{widget.icon}</span>}
-                  <span className="text-white text-xs font-medium">{widget.title}</span>
-                </div>
-              </div>
-            )}
-            <div className="card-body p-3">
-              <widget.component
-                plugin={plugin}
-                context={widgetContext}
-                onAction={(action, data) => plugin.execute?.(action, data)}
-                isActive={plugin.enabled}
-              />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-[hsl(220,20%,8%)] to-[hsl(220,20%,10%)] p-4 sm:p-8">
+      <div className="max-w-2xl mx-auto space-y-5">
+        
+        <ModuleHeader
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16.247 7.761a6 6 0 0 1 0 8.478" />
+              <path d="M19.075 4.933a10 10 0 0 1 0 14.134" />
+              <path d="M4.925 19.067a10 10 0 0 1 0-14.134" />
+              <path d="M7.753 16.239a6 6 0 0 1 0-8.478" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
+          }
+          title="Microphone"
+          description="Real-time microphone switching & audio quality analysis"
+        />
+        
+        {error && (
+          <div className="rounded-xl bg-red-500/15 border border-red-500/30 p-3 text-red-400 text-sm text-center">
+            {error}
           </div>
-        );
-      })}
-      
-      {/* Активные плагины индикатор */}
-      {activePlugins.length > 0 && (
-        <div className="flex flex-wrap gap-1 justify-center">
-          {activePlugins.map(plugin => (
-            <div key={plugin.id} className="badge badge-primary badge-sm gap-1">
-              {plugin.icon} {plugin.name}
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {/* Статус */}
-      <div className="text-center">
-        <div className="flex justify-between text-xs text-base-content/50">
-          <span>
-            {isRecording ? '🔴 Идёт запись...' : '⚪ Микрофон отключён'}
-          </span>
-          <span>
-            {audioDevices.length} устройств найдено
-          </span>
-        </div>
+        )}
+        
+        <DeviceSelector
+          devices={audioDevices}
+          selectedDeviceId={selectedDeviceId}
+          onDeviceChange={handleDeviceChange}
+          onStartMonitoring={handleStartMonitoring}
+          onStopMonitoring={handleStopMonitoring}
+          isRecording={isRecording}
+        />
+        
+        {activePlugins.length > 0 && 
+        //isRecording && 
+        (
+          <div className="space-y-4">
+            {widgets.map((widget) => {
+              const plugin = activePlugins.find(p => p.id === widget.pluginId);
+              if (!plugin) return null;
+              return (
+                <div key={widget.id}>
+                  <widget.component
+                    plugin={plugin}
+                    context={pluginContext}
+                    onAction={(action, data) => plugin.execute?.(action, data, pluginContext)}
+                    isActive={plugin.enabled}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
