@@ -52,6 +52,20 @@
     }
   }
 
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 5px rgba(99, 102, 241, 0.3);
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+      border-color: rgba(99, 102, 241, 0.6);
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 1.5s ease-in-out infinite;
+  }
 }
 
 

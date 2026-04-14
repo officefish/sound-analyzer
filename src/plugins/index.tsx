@@ -1,6 +1,6 @@
 import { LapHistoryPlugin } from '../modules/Stopwatch/plugins/LapHistoryPlugin';
 import { SoundEffectPlugin } from '../modules/Stopwatch/plugins/SoundEffectPlugin';
-import { NoiseGatePlugin } from '../modules/Microphone/plugins/NoiseGatePlugin';
+//import { NoiseGatePlugin } from '../modules/Microphone/plugins/NoiseGatePlugin';
 import { RecorderPlugin } from '../modules/Microphone/plugins/recorder/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
 // src/plugins/index.ts
@@ -13,7 +13,7 @@ export const ALL_PLUGINS: IPlugin[] = [
   LapHistoryPlugin,
   SoundEffectPlugin,
   RecorderPlugin,
-  NoiseGatePlugin,
+  //NoiseGatePlugin,
   TuneMonitorPlugin, 
 ];
 
@@ -33,7 +33,7 @@ export const registerAllPlugins = () => {
 export {
   LapHistoryPlugin,
   SoundEffectPlugin,
-  NoiseGatePlugin,
+  //NoiseGatePlugin,
   RecorderPlugin,
   TuneMonitorPlugin,
 };

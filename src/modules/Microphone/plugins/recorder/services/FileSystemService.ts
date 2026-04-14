@@ -2,16 +2,6 @@
 
 //import { IPluginContext } from "../../../../../types/plugins";
 
-// Типы для Electron
-declare global {
-  interface Window {
-    electronAPI?: {
-      saveAudioFile: (data: ArrayBuffer, filename: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      getMediaPath: () => Promise<string>;
-    };
-  }
-}
-
 export interface SaveResult {
   success: boolean;
   path?: string;

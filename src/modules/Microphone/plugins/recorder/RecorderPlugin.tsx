@@ -1,8 +1,11 @@
 // src/plugins/microphone2/RecorderPlugin.tsx
 
-import { IPlugin, IPluginWidget, IPluginContext } from '../../../../types/plugins';
+import { IPlugin, IPluginWidget, 
+  //IPluginContext 
+} from '../../../../types/plugins';
 import RecorderWidget from './widgets/RecorderWidget';
 import { fileSystemService } from './services/FileSystemService';
+import { audioLibrary } from '../../../../lib/audioLibrary';
 
 interface ChunkData {
   id: string;
@@ -120,15 +123,19 @@ class RecorderPluginClass implements IPlugin {
   
   // Получение статистики
   private getStats() {
+    // Получаем файлы из коллекции 'buffer' через audioLibrary
+    const bufferFiles = audioLibrary.getFilesByCollection('buffer');
+    const totalSize = bufferFiles.reduce((sum, f) => sum + f.size, 0);
+    
     return {
       totalRecordings: this.totalRecordings,
       recentFiles: this.recentFiles,
       segmentCount: this.segmentCount,
       isRecording: this.isRecordingFlag,
       isAutoRecording: this.isAutoRecordingFlag,
-      chunksCount: this.chunks.length,
-      chunksTotalSize: this.chunks.reduce((sum, c) => sum + c.size, 0),
-      currentChunkSize: this.currentChunkSize,
+      chunksCount: bufferFiles.length,
+      chunksTotalSize: totalSize,
+      currentChunkSize: totalSize,
       maxChunkSize: this.maxChunkSize,
     };
   }
@@ -143,66 +150,116 @@ class RecorderPluginClass implements IPlugin {
   }
   
   // Сохранение сегмента
-  private async saveSegment(isManual = false): Promise<{ success: boolean; path?: string; error?: string; savedToChunk?: boolean }> {
-    if (this.audioChunks.length === 0) {
-      console.warn('No audio chunks to save');
-      return { success: false, error: 'No audio data' };
-    }
-    
-    // Если автосохранение выключено и это не ручное сохранение — пропускаем
-    if (!this.settings.autoSave && !isManual) {
-      console.log('Auto-save disabled, skipping segment save');
-      return { success: false, error: 'Auto-save disabled' };
-    }
-    
-    const blob = new Blob(this.audioChunks, { type: this.settings.format === 'wav' ? 'audio/wav' : 'audio/webm' });
-    const duration = Date.now() - this.currentSegmentStart;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `recording_${timestamp}_${duration}ms.${this.settings.format}`;
-    
-    const isElectronAvailable = fileSystemService.isAvailable();
-    
-    if (isElectronAvailable && this.settings.autoSave) {
-      const result = await fileSystemService.saveAudioFile(blob, filename);
-      if (result.success) {
-        this.totalRecordings++;
-        this.recentFiles = [filename, ...this.recentFiles].slice(0, 5);
-        this.audioChunks = [];
-        this.currentSegmentStart = Date.now();
-        this.segmentCount++;
-        return { success: true, path: result.path };
-      }
-    }
-    
-    // Fallback: сохраняем в чанк
-    const chunk: ChunkData = {
-      id: `chunk_${timestamp}`,
-      timestamp: Date.now(),
-      size: blob.size,
-      blob,
-    };
-    
-    this.chunks.push(chunk);
-    this.currentChunkSize += blob.size;
+ // src/plugins/microphone2/RecorderPlugin.tsx
+
+
+// ... внутри класса RecorderPluginClass
+
+private async saveSegment(isManual = false): Promise<{ success: boolean; path?: string; error?: string; savedToChunk?: boolean }> {
+  if (this.audioChunks.length === 0) {
+    console.warn('No audio chunks to save');
+    return { success: false, error: 'No audio data' };
+  }
+
+  // Если автосохранение выключено и это не ручное сохранение — пропускаем
+  if (!this.settings.autoSave && !isManual) {
+    console.log('Auto-save disabled, skipping segment save');
+    return { success: false, error: 'Auto-save disabled' };
+  }
+
+  // Определяем MIME-тип
+  const mimeType = this.settings.format === 'wav' ? 'audio/wav' : 'audio/webm';
+  const blob = new Blob(this.audioChunks, { type: mimeType });
+
+  const duration = Date.now() - this.currentSegmentStart;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `recording_${timestamp}_${duration}ms.${this.settings.format}`;
+
+  // Сохраняем через audioLibrary (единый интерфейс для Electron и браузера)
+  const savedFile = await audioLibrary.saveAudioFile(blob, filename, 'buffer');
+
+  if (savedFile) {
+    // Успешно сохранили (в файловую систему или в память)
     this.totalRecordings++;
-    
+    this.recentFiles = [filename, ...this.recentFiles].slice(0, 5);
     this.audioChunks = [];
     this.currentSegmentStart = Date.now();
     this.segmentCount++;
-    
-    while (this.currentChunkSize > this.maxChunkSize && this.chunks.length > 1) {
-      const removed = this.chunks.shift();
-      if (removed) {
-        this.currentChunkSize -= removed.size;
-      }
-    }
-
-    this.segmentCount++;
     this.emit('onSegmentSaved', this.segmentCount);
-    
-    console.log(`📦 Saved to chunk: ${filename}, total chunks: ${this.chunks.length}`);
-    return { success: true, savedToChunk: true };
+
+    return {
+      success: true,
+      path: savedFile.path || savedFile.id,
+      savedToChunk: !savedFile.path, // если нет пути, значит сохранили в память (чанк)
+    };
   }
+
+  // Если сохранение не удалось (например, нет прав или ошибка)
+  console.error('Failed to save audio file via audioLibrary');
+  return { success: false, error: 'Save failed' };
+}
+
+  // private async saveSegment(isManual = false): Promise<{ success: boolean; path?: string; error?: string; savedToChunk?: boolean }> {
+  //   if (this.audioChunks.length === 0) {
+  //     console.warn('No audio chunks to save');
+  //     return { success: false, error: 'No audio data' };
+  //   }
+    
+  //   // Если автосохранение выключено и это не ручное сохранение — пропускаем
+  //   if (!this.settings.autoSave && !isManual) {
+  //     console.log('Auto-save disabled, skipping segment save');
+  //     return { success: false, error: 'Auto-save disabled' };
+  //   }
+    
+  //   const blob = new Blob(this.audioChunks, { type: this.settings.format === 'wav' ? 'audio/wav' : 'audio/webm' });
+    
+  //   const duration = Date.now() - this.currentSegmentStart;
+  //   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  //   const filename = `recording_${timestamp}_${duration}ms.${this.settings.format}`;
+    
+  //   const isElectronAvailable = fileSystemService.isAvailable();
+    
+  //   if (isElectronAvailable && this.settings.autoSave) {
+  //     const result = await fileSystemService.saveAudioFile(blob, filename);
+  //     if (result.success) {
+  //       this.totalRecordings++;
+  //       this.recentFiles = [filename, ...this.recentFiles].slice(0, 5);
+  //       this.audioChunks = [];
+  //       this.currentSegmentStart = Date.now();
+  //       this.segmentCount++;
+  //       return { success: true, path: result.path };
+  //     }
+  //   }
+    
+  //   // Fallback: сохраняем в чанк
+  //   const chunk: ChunkData = {
+  //     id: `chunk_${timestamp}`,
+  //     timestamp: Date.now(),
+  //     size: blob.size,
+  //     blob,
+  //   };
+    
+  //   this.chunks.push(chunk);
+  //   this.currentChunkSize += blob.size;
+  //   this.totalRecordings++;
+    
+  //   this.audioChunks = [];
+  //   this.currentSegmentStart = Date.now();
+  //   this.segmentCount++;
+    
+  //   while (this.currentChunkSize > this.maxChunkSize && this.chunks.length > 1) {
+  //     const removed = this.chunks.shift();
+  //     if (removed) {
+  //       this.currentChunkSize -= removed.size;
+  //     }
+  //   }
+
+  //   this.segmentCount++;
+  //   this.emit('onSegmentSaved', this.segmentCount);
+    
+  //   console.log(`📦 Saved to chunk: ${filename}, total chunks: ${this.chunks.length}`);
+  //   return { success: true, savedToChunk: true };
+  // }
   
   // Запуск интервального таймера для автозаписи
   private startSegmentTimer(): void {
@@ -464,9 +521,14 @@ class RecorderPluginClass implements IPlugin {
     return this.chunks;
   }
   
-  clearChunks(): void {
-    this.chunks = [];
-    this.currentChunkSize = 0;
+  private clearChunks(): void {
+    const bufferFiles = audioLibrary.getFilesByCollection('buffer');
+    bufferFiles.forEach(async (file) => {
+      await audioLibrary.deleteFile(file.id);
+    });
+    this.totalRecordings = 0;
+    this.recentFiles = [];
+    console.log('🗑️ All buffer files cleared');
   }
   
   downloadChunk(chunkId: string): void {
@@ -490,7 +552,9 @@ class RecorderPluginClass implements IPlugin {
   }
   
   // Методы жизненного цикла
-  onModuleEvent(event: string, data: any, context?: IPluginContext): void {
+  onModuleEvent(event: string, data: any, 
+    //context?: IPluginContext
+  ): void {
     switch (event) {
       case 'streamAvailable':
         if (data?.stream) {
@@ -510,12 +574,16 @@ class RecorderPluginClass implements IPlugin {
     }
   }
   
-  onActivate(context?: IPluginContext): void {
+  onActivate(
+    //context?: IPluginContext
+  ): void {
     console.log('🎙️ Recorder Plugin activated');
     this.resetState();
   }
   
-  onDeactivate(context?: IPluginContext): void {
+  onDeactivate(
+    //context?: IPluginContext
+  ): void {
     console.log('🎙️ Recorder Plugin deactivated');
     if (this.isRecordingFlag) {
       this.stopRecordingInternal();
@@ -557,7 +625,9 @@ class RecorderPluginClass implements IPlugin {
     return elapsed;
   }
   
-  execute(action: string, data?: any, context?: IPluginContext): any {
+  execute(action: string, data?: any, 
+    //context?: IPluginContext
+  ): any {
     switch (action) {
        case 'start':
         return this.startManualRecording(data?.stream);

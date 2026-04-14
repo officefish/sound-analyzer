@@ -5,6 +5,19 @@ import Sidebar from './components/Navigation/Sidebar';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 
+// Типы для Electron
+declare global {
+  interface Window {
+    electronAPI?: {
+      saveAudioFile: (data: ArrayBuffer, filename: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+      getMediaPath: () => Promise<string>;
+      readFile: (path: string) => Promise<ArrayBuffer>;
+      deleteFile: (path: string) => Promise<boolean>;
+      listFiles: (dir: string) => Promise<string[]>;
+    };
+  }
+}
+
 // Ленивая загрузка модулей
 const Stopwatch = lazy(() => import('./modules/Stopwatch'));
 //const Microphone = lazy(() => import('./modules/Microphone'));

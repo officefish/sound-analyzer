@@ -1,3 +1,5 @@
+// src/modules/Microphone2/components/DeviceSelector.tsx
+
 import React, { useState, useRef, useEffect } from 'react';
 
 interface DeviceSelectorProps {
@@ -33,27 +35,38 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
   }, []);
   
   return (
-    <div className="rounded-2xl border bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 p-6 transition-all duration-500">
+    <div className={`
+      rounded-2xl border p-6 transition-all duration-500
+      ${isRecording 
+        ? 'bg-gradient-to-br bg-gradient-to-b from-emerald-800 to-slate-900 border-emerald-500 shadow-lg shadow-emerald-500/30' 
+        : 'border-gray-700'
+      }
+    `}>
       <div className="mb-5">
-        <label className="block text-xs font-semibold text-base-content/60 uppercase tracking-widest mb-2">
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
           Input Device
         </label>
         
         <div className="relative" ref={dropdownRef}>
-          {/* Кастомный селектор */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-base-300 border border-base-300 hover:border-primary/40 transition-all duration-200 group"
+            className={`
+              w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group
+              ${isRecording 
+                ? 'bg-gray-900 border-2 border-emerald-700' 
+                : 'bg-gray-900 border border-gray-700 hover:border-emerald-700'
+              }
+            `}
           >
             <div className="flex items-center gap-3">
               <div className={`
                 w-2.5 h-2.5 rounded-full transition-all duration-300
                 ${isRecording 
-                  ? 'bg-success shadow-[0_0_8px_rgba(var(--success-rgb),0.8)] animate-pulse' 
-                  : 'bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.8)]'
+                  ? 'bg-green-500 animate-pulse' 
+                  : 'bg-indigo-500'
                 }
               `} />
-              <span className="text-sm font-medium text-base-content truncate max-w-[280px]">
+              <span className="text-sm font-medium text-gray-200 truncate max-w-[280px]">
                 {selectedDevice?.label || (devices.length === 0 ? 'Загрузка устройств...' : 'Выберите устройство')}
               </span>
             </div>
@@ -67,15 +80,14 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={`w-4 h-4 text-base-content/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+              className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
             >
               <path d="m6 9 6 6 6-6" />
             </svg>
           </button>
           
-          {/* Выпадающий список */}
           {isOpen && devices.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 rounded-xl bg-base-200 border border-base-300 shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-xl bg-gray-900 border border-gray-700 shadow-xl z-50 max-h-60 overflow-y-auto">
               {devices.map((device) => (
                 <button
                   key={device.deviceId}
@@ -86,14 +98,14 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
                   className={`
                     w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all duration-150
                     ${selectedDeviceId === device.deviceId 
-                      ? 'bg-primary/10 text-primary' 
-                      : 'text-base-content hover:bg-base-300/50'
+                      ? 'bg-indigo-500/10 text-indigo-400' 
+                      : 'text-gray-300 hover:bg-gray-800'
                     }
                   `}
                 >
                   <div className={`
                     w-2 h-2 rounded-full
-                    ${selectedDeviceId === device.deviceId ? 'bg-primary shadow-[0_0_6px_rgba(var(--primary-rgb),0.6)]' : 'bg-base-content/30'}
+                    ${selectedDeviceId === device.deviceId ? 'bg-indigo-500' : 'bg-gray-600'}
                   `} />
                   <span className="text-sm truncate">
                     {device.label || `Микрофон ${device.deviceId.slice(0, 8)}...`}
@@ -105,12 +117,11 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
         </div>
       </div>
       
-      {/* Кнопка управления */}
       {!isRecording ? (
         <button
           onClick={onStartMonitoring}
           disabled={devices.length === 0}
-          className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 bg-gradient-to-r from-primary to-primary/80 text-primary-content hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -133,7 +144,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({
       ) : (
         <button
           onClick={onStopMonitoring}
-          className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 bg-error/15 border border-error/30 text-error hover:bg-error/25"
+          className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
