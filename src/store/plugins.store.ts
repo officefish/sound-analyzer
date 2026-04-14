@@ -245,7 +245,7 @@ export const usePluginsStore = create<PluginsState>()(
       
       executeOnModule: (moduleId, action, data) => {
         const activePlugins = get().getActivePluginsByModule(moduleId);
-        console.log(`🎯 executeOnModule: ${moduleId}, action: ${action}, plugins: ${activePlugins.length}`);
+        //console.log(`🎯 executeOnModule: ${moduleId}, action: ${action}, plugins: ${activePlugins.length}`);
         
         const results: any[] = [];
         activePlugins.forEach(plugin => {

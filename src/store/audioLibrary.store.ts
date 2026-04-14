@@ -206,6 +206,23 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       revokeUrl: (url: string) => {
         URL.revokeObjectURL(url);
       },
+
+      setActiveCollectionId: (id) => set({ activeCollectionId: id }),
+
+      updateCollection: async (id, newName) => {
+        const { collections } = get();
+        const collection = collections.find(c => c.id === id);
+        if (!collection) return false;
+        if (collection.id === 'buffer') return false; // Не переименовываем Buffer
+        
+        set({
+            collections: collections.map(c =>
+            c.id === id ? { ...c, name: newName } : c
+            ),
+        });
+        return true;
+      },
+      
     }),
     {
       name: STORAGE_KEY,

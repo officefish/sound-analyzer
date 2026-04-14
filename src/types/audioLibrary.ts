@@ -36,4 +36,6 @@ export interface AudioLibraryActions {
   moveFileToCollection: (fileId: string, targetCollectionId: string) => Promise<boolean>;
   getFileUrl: (file: AudioFile) => Promise<string>;
   revokeUrl: (url: string) => void;
+  setActiveCollectionId: (id: string | null) => void;
+  updateCollection: (id: string, newName: string) => Promise<boolean>;
 }

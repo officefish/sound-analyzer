@@ -9,7 +9,9 @@ export const audioLibrary = {
   },
   
   saveAudioFile: async (blob: Blob, fileName: string, collectionId?: string): Promise<AudioFile | null> => {
-    return useAudioLibraryStore.getState().saveAudioFile(blob, fileName, collectionId);
+    const result = await useAudioLibraryStore.getState().saveAudioFile(blob, fileName, collectionId);
+    console.log('📀 Saved file, store now has:', useAudioLibraryStore.getState().files.length);
+    return result;
   },
   
   getFilesByCollection: (collectionId: string): AudioFile[] => {
@@ -39,7 +41,15 @@ export const audioLibrary = {
   revokeUrl: (url: string): void => {
     useAudioLibraryStore.getState().revokeUrl(url);
   },
-  
+
+  setActiveCollectionId: (id: string | null) => {
+    useAudioLibraryStore.getState().setActiveCollectionId(id);
+  },
+
+  updateCollection: async (id: string, newName: string): Promise<boolean> => {
+    return useAudioLibraryStore.getState().updateCollection(id, newName)
+  },
+
   // Дополнительно: получение состояния (только чтение)
   getCollections: (): AudioCollection[] => {
     return useAudioLibraryStore.getState().collections;
@@ -52,6 +62,8 @@ export const audioLibrary = {
   isElectron: (): boolean => {
     return useAudioLibraryStore.getState().isElectron;
   },
+
+
 };
 
 // Для React-компонентов — хук (просто обёртка над функциями, чтобы не импортировать audioLibrary напрямую)

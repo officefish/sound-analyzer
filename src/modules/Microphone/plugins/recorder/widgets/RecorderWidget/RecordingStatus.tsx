@@ -40,7 +40,7 @@ const RecordingStatus: React.FC<RecordingStatusProps> = ({
     const updateDuration = () => {
       // Используем единый метод для обоих режимов
       const displayTime = onAction('getDisplayTime');
-      console.log('📊 updateDuration, displayTime:', displayTime);
+      //console.log('📊 updateDuration, displayTime:', displayTime);
       
       if (typeof displayTime === 'number') {
         setDuration(displayTime);

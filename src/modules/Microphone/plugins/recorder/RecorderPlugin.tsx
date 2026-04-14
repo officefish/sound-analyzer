@@ -605,23 +605,26 @@ private async saveSegment(isManual = false): Promise<{ success: boolean; path?: 
 
   // Получить текущую длительность для отображения в UI
   getDisplayTime(): number {
+    
+    /*
     console.log('🔍 getDisplayTime called', {
       isRecordingFlag: this.isRecordingFlag,
       isAutoRecordingFlag: this.isAutoRecordingFlag,
     });
+    */
     
     if (!this.isRecordingFlag) return 0;
     
     // В авторежиме — длительность текущего сегмента
     if (this.isAutoRecordingFlag) {
       const elapsed = Math.floor((Date.now() - this.currentSegmentStart) / 1000);
-      console.log('  Auto mode, elapsed:', elapsed);
+      //console.log('  Auto mode, elapsed:', elapsed);
       return elapsed;
     }
     
     // В ручном режиме — общая длительность записи
     const elapsed = Math.floor((Date.now() - this.recordingStartTime) / 1000);
-    console.log('  Manual mode, elapsed:', elapsed);
+    //console.log('  Manual mode, elapsed:', elapsed);
     return elapsed;
   }
   

@@ -4,6 +4,7 @@ import { MODULES, ModuleType } from './types/modules';
 import Sidebar from './components/Navigation/Sidebar';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
+import Library from './modules/Library';
 
 // Типы для Electron
 declare global {
@@ -26,13 +27,14 @@ const Microphone = lazy(() => import('./modules/Microphone'));
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
   stopwatch: Stopwatch,
-  //microphone: Microphone,
   microphone: Microphone,
+  library: Library,
 };
 
 // Обновляем MODULES с реальными компонентами
 MODULES[0].component = Stopwatch;
 MODULES[1].component = Microphone;
+MODULES[2].component = Microphone;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();
