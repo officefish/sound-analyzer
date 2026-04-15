@@ -114,7 +114,7 @@ const Library: React.FC = () => {
 
       {/* Плеер с гистограммой */}
       <AudioPlayerWithHistogram
-        currentFile={currentPlayingFile}
+        //currentFile={currentPlayingFile}
         onPlay={handlePlayFile}
         onStop={handleStopPlayback}
       />
@@ -148,8 +148,8 @@ const Library: React.FC = () => {
             collections={otherCollectionsForMove}
             onDeleteFile={handleDeleteFile}
             onMoveFile={handleMoveFile}
-            onPlayFile={handlePlayFile}
-            currentPlayingFileId={currentPlayingFile?.id || null}
+            //onPlayFile={handlePlayFile}
+            //currentPlayingFileId={currentPlayingFile?.id || null}
           />
         </div>
       </div>
