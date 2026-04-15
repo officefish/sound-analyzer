@@ -20,17 +20,23 @@ const CollectionList: React.FC<CollectionListProps> = ({
 }) => {
   return (
     <div className="bg-base-200 rounded-2xl p-4">
+
       <div className="flex justify-between items-center mb-3">
-        <h3 className="text-sm font-semibold text-base-content/70 uppercase tracking-wider">
-          📁 Коллекции
-        </h3>
+        <div className="flex items-center gap-2">
+          <span className="text-base">📁</span>
+          <span className="text-xs font-medium text-primary uppercase tracking-wide">
+            Коллекции
+          </span>
+        </div>
         <button
           onClick={onAddCollection}
-          className="btn btn-xs btn-primary gap-1"
+          className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
         >
-          + Новая
+          <span>+</span>
+          <span>Новая</span>
         </button>
       </div>
+
       <div className="space-y-1 max-h-96 overflow-y-auto">
         {collections.map((col) => (
           <div

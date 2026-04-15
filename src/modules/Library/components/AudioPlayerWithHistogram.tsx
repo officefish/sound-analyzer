@@ -1,6 +1,8 @@
 // src/modules/Library/components/AudioPlayerWithHistogram.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef
+  //, useCallback 
+} from 'react';
 import { AudioFile } from '../../../types/audioLibrary';
 import { audioLibrary } from '../../../lib/audioLibrary';
 import { audioPlayback } from '../../../services/AudioPlaybackService';
@@ -27,6 +29,11 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
 
   // Подписка на изменения состояния воспроизведения
   useEffect(() => {
+    // В компоненте AudioPlayerWithHistogram, добавим эффект для отслеживания currentTime
+
+    // Уже есть useEffect для подписки на statechange, он должен обновлять playedBarsCount.
+    // Проверим, что в handleStateChange правильно обновляется playedBarsCount:
+
     const handleStateChange = (state: any) => {
       console.log('🎵 Player state changed:', state);
       
@@ -39,7 +46,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
         setCurrentTime(state.currentTime);
         setDuration(state.duration);
         
-        // Обновляем количество прослушанных столбцов
+        // Синхронизируем playedBarsCount из состояния
         if (amplitudes.length > 0 && state.duration > 0) {
           const progressRatio = state.currentTime / state.duration;
           const played = Math.floor(progressRatio * amplitudes.length);
@@ -50,7 +57,6 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
           onPlay?.(state.currentFile);
         }
       } else {
-        // Нет активного файла
         setCurrentFile(null);
         setTrackName('Нет трека');
         setIsPlaying(false);
@@ -180,24 +186,30 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
   };
 
   const handleBarClick = (index: number) => {
-    if (currentFile && duration > 0) {
+    if (currentFile && duration > 0 && amplitudes.length > 0) {
       const seekRatio = index / amplitudes.length;
       const newTime = seekRatio * duration;
       if (isFinite(newTime)) {
         audioPlayback.seek(newTime);
+        // Обновляем локально для мгновенного отклика
+        const played = Math.min(amplitudes.length, Math.max(0, index + 1));
+        setPlayedBarsCount(played);
       }
     }
   };
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === histogramContainerRef.current || (e.target as HTMLElement).classList?.contains('histogram-bars')) {
-      if (currentFile && duration > 0 && histogramContainerRef.current) {
+      if (currentFile && duration > 0 && histogramContainerRef.current && amplitudes.length > 0) {
         const rect = histogramContainerRef.current.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         let ratio = Math.min(0.999, Math.max(0, clickX / rect.width));
         const newTime = ratio * duration;
         if (isFinite(newTime)) {
           audioPlayback.seek(newTime);
+          // Обновляем локально для мгновенного отклика
+          const played = Math.floor(ratio * amplitudes.length);
+          setPlayedBarsCount(Math.min(amplitudes.length, Math.max(0, played)));
         }
       }
     }
@@ -219,13 +231,15 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
     }
   };
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = amplitudes.length > 0 
+  ? (playedBarsCount / amplitudes.length) * 100 
+  : 0;
 
   return (
     <div className="bg-base-200 rounded-2xl p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex-1">
-          <div className="text-sm text-base-content/50">Сейчас играет</div>
+          <div className="text-sm text-primary">Сейчас играет</div>
           <div className="font-medium text-base-content truncate">
             🎵 {trackName}
           </div>
@@ -267,8 +281,10 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
               return (
                 <span
                   key={idx}
-                  className={`flex-1 rounded-t-sm transition-all duration-75 cursor-pointer hover:scale-y-110 hover:brightness-110 ${
-                    isPlayed ? 'bg-primary' : 'bg-base-400'
+                  className={`flex-1 rounded-t-sm transition-all duration-75 cursor-pointer hover:scale-y-110 ${
+                    isPlayed 
+                      ? 'bg-primary shadow-[0_0_4px_rgba(var(--primary),0.5)]' 
+                      : 'bg-base-300'
                   }`}
                   style={{ height: `${Math.max(4, height)}px` }}
                   onClick={() => handleBarClick(idx)}
@@ -286,7 +302,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-        </div>
+      </div>
         
         <div className="flex justify-between text-xs text-base-content/50 mt-2">
           <span>🎵 {formatTime(currentTime)}</span>
@@ -319,7 +335,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
         </button>
       </div>
       
-      <div className="text-center text-[10px] text-base-content/40 mt-3">
+      <div className="text-center text-[10px] text-info mt-3">
         ✨ Наведи на столбец — он подсвечивается | Клик — перемотка | Цветные = прослушано
       </div>
     </div>

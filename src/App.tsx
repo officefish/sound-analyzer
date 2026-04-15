@@ -10,11 +10,14 @@ import Library from './modules/Library';
 declare global {
   interface Window {
     electronAPI?: {
-      saveAudioFile: (data: ArrayBuffer, filename: string) => Promise<{ success: boolean; path?: string; error?: string }>;
       getMediaPath: () => Promise<string>;
+      saveAudioFile: (data: ArrayBuffer, filename: string, collectionName?: string) => Promise<{ success: boolean; path?: string; error?: string }>;
       readFile: (path: string) => Promise<ArrayBuffer>;
-      deleteFile: (path: string) => Promise<boolean>;
-      listFiles: (dir: string) => Promise<string[]>;
+      deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>;
+      listMedia: () => Promise<{ success: boolean; collections?: any[]; error?: string }>;
+      createCollection: (name: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+      deleteCollection: (path: string) => Promise<{ success: boolean; error?: string }>;
+      moveFile: (filePath: string, targetCollectionPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
     };
   }
 }

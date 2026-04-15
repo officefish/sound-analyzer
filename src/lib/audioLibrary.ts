@@ -26,7 +26,7 @@ export const audioLibrary = {
     return useAudioLibraryStore.getState().deleteCollection(collectionId);
   },
   
-  createCollection: async (name: string): Promise<AudioCollection> => {
+  createCollection: async (name: string): Promise<AudioCollection | null> => {
     return useAudioLibraryStore.getState().createCollection(name);
   },
   
@@ -63,6 +63,9 @@ export const audioLibrary = {
     return useAudioLibraryStore.getState().isElectron;
   },
 
+  loadFromFileSystem: async () => {
+    await useAudioLibraryStore.getState().loadFromFileSystem();
+  },
 
 };
 

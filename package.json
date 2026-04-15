@@ -1,8 +1,11 @@
 {
-  "name": "stopwatch-react-tailwind",
+  "name": "membrana",
+  "productName": "Membrana",
   "version": "1.0.0",
-  "description": "Секундомер на Electron + React + TypeScript + TailwindCSS",
+  "description": "Membrana - Audio Analysis Desktop Application",
   "main": "dist-electron/main.js",
+  "author": "druid",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -14,10 +17,8 @@
     "build:electron": "tsc --project tsconfig.electron.json",
     "build:react": "vite build",
     "dist": "npm run build:electron && npm run build && electron-builder",
-    "dist:win": "npm run build:electron && npm run build && electron-builder --win"
+    "dist:win": "npm run build:electron && npm run build && electron-builder --config electron-builder.json --win"
   },
-  "author": "Your Name",
-  "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",

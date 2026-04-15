@@ -28,14 +28,15 @@ export interface AudioLibraryState {
 
 export interface AudioLibraryActions {
   init: () => Promise<void>;
+  loadFromFileSystem: () => Promise<void>;
   saveAudioFile: (blob: Blob, fileName: string, collectionId?: string) => Promise<AudioFile | null>;
   getFilesByCollection: (collectionId: string) => AudioFile[];
   deleteFile: (fileId: string) => Promise<boolean>;
   deleteCollection: (collectionId: string) => Promise<boolean>;
-  createCollection: (name: string) => Promise<AudioCollection>;
+  createCollection: (name: string) => Promise<AudioCollection | null>;  // ✅ Исправлено
+  updateCollection: (id: string, newName: string) => Promise<boolean>;
   moveFileToCollection: (fileId: string, targetCollectionId: string) => Promise<boolean>;
   getFileUrl: (file: AudioFile) => Promise<string>;
   revokeUrl: (url: string) => void;
   setActiveCollectionId: (id: string | null) => void;
-  updateCollection: (id: string, newName: string) => Promise<boolean>;
 }

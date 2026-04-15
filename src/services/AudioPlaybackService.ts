@@ -144,21 +144,10 @@ class AudioPlaybackService {
     console.log('🎵 Playing file:', file.name);
     
     try {
-      // 1. Останавливаем текущее воспроизведение, но НЕ эмитим событие сразу
-      this.stopProgressTracking();
-      
-      if (this.audioElement) {
-        this.audioElement.pause();
-        this.audioElement.src = '';
-        this.audioElement = null;
-      }
-      this.revokeCurrentUrl();
-      
-      // 2. Устанавливаем новый файл ДО того, как эмитим события
-      this.currentFile = file;
-      
-      // 3. Создаём URL и аудио элемент
+      this.stop();
+
       let audioUrl: string;
+
       if (file.blob) {
         audioUrl = URL.createObjectURL(file.blob);
         this.currentBlobUrl = audioUrl;
@@ -170,8 +159,15 @@ class AudioPlaybackService {
       }
 
       this.audioElement = new Audio(audioUrl);
+      this.currentFile = file;
 
-      // 4. Настраиваем обработчики
+      // Ждём загрузки метаданных, чтобы получить длительность
+      await new Promise((resolve) => {
+        this.audioElement!.addEventListener('loadedmetadata', resolve, { once: true });
+      });
+
+      console.log('Duration loaded:', this.audioElement.duration);
+
       this.audioElement.addEventListener('loadedmetadata', () => {
         this.updateState();
         this.emit('loadedmetadata', { duration: this.audioElement?.duration || 0 });
@@ -187,7 +183,6 @@ class AudioPlaybackService {
         this.stop();
       });
 
-      // 5. Обновляем состояние и запускаем воспроизведение
       this.updateState();
       await this.audioElement.play();
       this.startProgressTracking();
@@ -199,6 +194,34 @@ class AudioPlaybackService {
       this.updateState();
     }
   }
+
+  async preloadMetadata(file: AudioFile): Promise<number> {
+  return new Promise(async (resolve) => {
+    let audioUrl: string;
+    
+    if (file.blob) {
+      audioUrl = URL.createObjectURL(file.blob);
+    } else if (file.path) {
+      audioUrl = await audioLibrary.getFileUrl(file);
+    } else {
+      resolve(0);
+      return;
+    }
+    
+    const audio = new Audio(audioUrl);
+    audio.addEventListener('loadedmetadata', () => {
+      const duration = audio.duration;
+      URL.revokeObjectURL(audioUrl);
+      resolve(duration);
+    });
+    audio.addEventListener('error', () => {
+      URL.revokeObjectURL(audioUrl);
+      resolve(0);
+    });
+    audio.load();
+  });
+}
+
 
   pause() {
     if (this.audioElement) {
@@ -235,6 +258,9 @@ class AudioPlaybackService {
   seek(time: number) {
     if (this.audioElement) {
       this.audioElement.currentTime = time;
+      this.updateState();
+      // Принудительно отправляем timeupdate для мгновенного обновления
+      this.emit('timeupdate', { currentTime: time });
     }
   }
 

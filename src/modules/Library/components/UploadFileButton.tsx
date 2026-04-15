@@ -1,5 +1,6 @@
+// src/modules/Library/components/UploadFileButton.tsx
+
 import React, { useRef } from 'react';
-import { Button } from 'react-daisyui';
 
 interface UploadFileButtonProps {
   onUpload: (files: FileList) => Promise<void>;
@@ -16,7 +17,7 @@ const UploadFileButton: React.FC<UploadFileButtonProps> = ({ onUpload, disabled 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       await onUpload(e.target.files);
-      e.target.value = ''; // reset
+      e.target.value = '';
     }
   };
 
@@ -30,15 +31,14 @@ const UploadFileButton: React.FC<UploadFileButtonProps> = ({ onUpload, disabled 
         multiple
         onChange={handleChange}
       />
-      <Button
+      <button
         onClick={handleClick}
         disabled={disabled}
-        color="primary"
-        size="sm"
-        startIcon="📂"
+        className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5"
       >
-        Загрузить файлы
-      </Button>
+        <span>📂</span>
+        <span>Загрузить файлы</span>
+      </button>
     </>
   );
 };

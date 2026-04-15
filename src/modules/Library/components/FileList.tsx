@@ -19,9 +19,12 @@ const FileList: React.FC<FileListProps> = ({
 }) => {
   return (
     <div className="bg-base-200 rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-base-content/70 uppercase tracking-wider mb-3">
-        🎵 Файлы
-      </h3>
+     <div className="flex items-center gap-2 mb-3">
+      <span className="text-base">🎵</span>
+      <span className="text-xs font-medium text-primary uppercase tracking-wide">
+        Файлы
+      </span>
+    </div>
       {files.length === 0 ? (
         <div className="text-center text-base-content/50 py-8">
           Нет файлов в этой коллекции

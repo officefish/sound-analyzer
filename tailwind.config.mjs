@@ -19,7 +19,10 @@ export default {
           '0%, 100%': { textShadow: '0 0 10px rgba(0, 255, 136, 0.5)' },
           '50%': { textShadow: '0 0 20px rgba(0, 255, 136, 0.8)' },
         }
-      }
+      },
+      colors: {
+        "primary-dark": "color-mix(in oklab, oklch(var(--p)), black 15%)",
+      },
     },
   },
   plugins: [

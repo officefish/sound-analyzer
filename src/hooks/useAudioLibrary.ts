@@ -29,5 +29,6 @@ export const useAudioLibrary = () => {
     revokeUrl: audioLibrary.revokeUrl,
     setActiveCollectionId: audioLibrary.setActiveCollectionId,
     updateCollection: audioLibrary.updateCollection,
+    loadFromFileSystem: audioLibrary.loadFromFileSystem,
   };
 };

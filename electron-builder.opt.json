@@ -2,7 +2,7 @@
   "build": {
     "extends": null,
     "appId": "druid.techies68.sound-analyzer",
-    "productName": "Sound Analyzer",
+    "productName": "Membrana",
     "directories": {
       "output": "release",
       "buildResources": "build"

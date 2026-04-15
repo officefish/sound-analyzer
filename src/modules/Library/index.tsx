@@ -23,7 +23,7 @@ const Library: React.FC = () => {
     deleteFile,
     moveFileToCollection,
     saveAudioFile,
-    isElectron,
+    //isElectron,
   } = useAudioLibrary();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -135,10 +135,20 @@ const Library: React.FC = () => {
         {/* Правая колонка: файлы */}
         <div className="lg:col-span-2">
           <div className="flex justify-between items-center mb-4">
-            <div className="text-sm text-base-content/70">
-              {activeCollectionId
-                ? `Коллекция: ${collections.find(c => c.id === activeCollectionId)?.name}`
-                : 'Выберите коллекцию'}
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎵</span>
+              <div className="text-xs font-medium uppercase tracking-wide">
+                {activeCollectionId ? (
+                  <>
+                    <span className="text-primary">Коллекция:</span>{' '}
+                    <span className="text-secondary">
+                      {collections.find(c => c.id === activeCollectionId)?.name}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-base-content/50">Выберите коллекцию</span>
+                )}
+              </div>
             </div>
             <UploadFileButton onUpload={handleUploadFiles} disabled={!activeCollectionId} />
           </div>

@@ -1,30 +1,22 @@
+// vite.config.ts
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
   base: './',
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
-    rollupOptions: {
-      input: 'index.html'
-    }
-  }
+    emptyOutDir: true,
+  },
+  server: {
+    port: 5173,
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+    },
+  },
 });
-
-// export default defineConfig({
-//   plugins: [react()],
-//   base: './',
-//   build: {
-//     outDir: 'dist',
-//     emptyOutDir: true,
-//   },
-//   server: {
-//     port: 5173,
-//   },
-//   css: {
-//     postcss: './postcss.config.js',  // Явно указываем postcss конфиг
-//   },
-// });
-// vite.config.mjs
