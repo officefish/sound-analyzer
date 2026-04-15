@@ -2,12 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 // Типы приложений
-export type AppType = 'stopwatch' | 'microphone';
+import { ModuleType } from '../types/modules';
 
 // Интерфейс состояния
 interface AppState {
-  currentApp: AppType;
-  setCurrentApp: (app: AppType) => void;
+  currentApp: ModuleType;
+  setCurrentApp: (app: ModuleType) => void;
   
   // Настройки (будут сохраняться)
   settings: {
@@ -20,8 +20,9 @@ interface AppState {
   navigationCount: {
     stopwatch: number;
     microphone: number;
+    library: number;
   };
-  incrementNavigationCount: (app: AppType) => void;
+  incrementNavigationCount: (app: ModuleType) => void;
 }
 
 // Создаём store с persist (сохранение в localStorage)
@@ -56,6 +57,7 @@ export const useAppStore = create<AppState>()(
       navigationCount: {
         stopwatch: 0,
         microphone: 0,
+        library: 0,
       },
       incrementNavigationCount: (app) =>
         set((state) => ({

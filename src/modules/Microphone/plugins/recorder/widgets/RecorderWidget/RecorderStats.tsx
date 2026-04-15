@@ -29,7 +29,7 @@ const RecorderStats: React.FC<RecorderStatsProps> = ({
   chunksCount,
   chunksSize,
   onClearChunks,
-  onDownloadChunk,
+  //onDownloadChunk,
 }) => {
   const [showFiles, setShowFiles] = useState(false);
   

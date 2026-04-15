@@ -97,7 +97,7 @@ class RecorderPluginClass implements IPlugin {
   private currentSegmentStart = 0;
   //private currentSegmentDuration: number = 0; // Текущая длительность сегмента
   private chunks: ChunkData[] = [];
-  private currentChunkSize = 0;
+  //private currentChunkSize = 0;
   private maxChunkSize = 50 * 1024 * 1024;
 
   // Система событий для связи с виджетом
@@ -199,68 +199,6 @@ private async saveSegment(isManual = false): Promise<{ success: boolean; path?: 
   return { success: false, error: 'Save failed' };
 }
 
-  // private async saveSegment(isManual = false): Promise<{ success: boolean; path?: string; error?: string; savedToChunk?: boolean }> {
-  //   if (this.audioChunks.length === 0) {
-  //     console.warn('No audio chunks to save');
-  //     return { success: false, error: 'No audio data' };
-  //   }
-    
-  //   // Если автосохранение выключено и это не ручное сохранение — пропускаем
-  //   if (!this.settings.autoSave && !isManual) {
-  //     console.log('Auto-save disabled, skipping segment save');
-  //     return { success: false, error: 'Auto-save disabled' };
-  //   }
-    
-  //   const blob = new Blob(this.audioChunks, { type: this.settings.format === 'wav' ? 'audio/wav' : 'audio/webm' });
-    
-  //   const duration = Date.now() - this.currentSegmentStart;
-  //   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  //   const filename = `recording_${timestamp}_${duration}ms.${this.settings.format}`;
-    
-  //   const isElectronAvailable = fileSystemService.isAvailable();
-    
-  //   if (isElectronAvailable && this.settings.autoSave) {
-  //     const result = await fileSystemService.saveAudioFile(blob, filename);
-  //     if (result.success) {
-  //       this.totalRecordings++;
-  //       this.recentFiles = [filename, ...this.recentFiles].slice(0, 5);
-  //       this.audioChunks = [];
-  //       this.currentSegmentStart = Date.now();
-  //       this.segmentCount++;
-  //       return { success: true, path: result.path };
-  //     }
-  //   }
-    
-  //   // Fallback: сохраняем в чанк
-  //   const chunk: ChunkData = {
-  //     id: `chunk_${timestamp}`,
-  //     timestamp: Date.now(),
-  //     size: blob.size,
-  //     blob,
-  //   };
-    
-  //   this.chunks.push(chunk);
-  //   this.currentChunkSize += blob.size;
-  //   this.totalRecordings++;
-    
-  //   this.audioChunks = [];
-  //   this.currentSegmentStart = Date.now();
-  //   this.segmentCount++;
-    
-  //   while (this.currentChunkSize > this.maxChunkSize && this.chunks.length > 1) {
-  //     const removed = this.chunks.shift();
-  //     if (removed) {
-  //       this.currentChunkSize -= removed.size;
-  //     }
-  //   }
-
-  //   this.segmentCount++;
-  //   this.emit('onSegmentSaved', this.segmentCount);
-    
-  //   console.log(`📦 Saved to chunk: ${filename}, total chunks: ${this.chunks.length}`);
-  //   return { success: true, savedToChunk: true };
-  // }
-  
   // Запуск интервального таймера для автозаписи
   private startSegmentTimer(): void {
     if (this.segmentTimer) clearInterval(this.segmentTimer);

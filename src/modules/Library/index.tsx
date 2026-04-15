@@ -3,6 +3,7 @@ import { useAudioLibrary } from '../../hooks/useAudioLibrary';
 import ModuleHeader from '../../components/ui/ModuleHeader';
 import CollectionList from './components/CollectionList';
 import FileList from './components/FileList';
+import AudioPlayerWithHistogram from './components/AudioPlayerWithHistogram';
 import AddCollectionModal from './components/AddCollectionModal';
 import EditCollectionModal from './components/EditCollectionModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
@@ -22,16 +23,13 @@ const Library: React.FC = () => {
     deleteFile,
     moveFileToCollection,
     saveAudioFile,
-    getFileUrl,
-    revokeUrl,
     isElectron,
   } = useAudioLibrary();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editCollection, setEditCollection] = useState<AudioCollection | null>(null);
   const [deleteItem, setDeleteItem] = useState<{ type: 'collection' | 'file'; item: AudioCollection | AudioFile | null }>({ type: 'file', item: null });
-  const [playingFileId, setPlayingFileId] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [currentPlayingFile, setCurrentPlayingFile] = useState<AudioFile | null>(null);
 
   useEffect(() => {
     init();
@@ -59,8 +57,8 @@ const Library: React.FC = () => {
   const handleDeleteFile = async () => {
     if (deleteItem.item && deleteItem.type === 'file') {
       await deleteFile(deleteItem.item.id);
-      if (playingFileId === deleteItem.item.id) {
-        handleStopPlayback();
+      if (currentPlayingFile?.id === deleteItem.item.id) {
+        setCurrentPlayingFile(null);
       }
     }
     setDeleteItem({ type: 'file', item: null });
@@ -74,8 +72,17 @@ const Library: React.FC = () => {
     const collectionId = activeCollectionId || 'buffer';
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
-      if (file.type.startsWith('audio/')) {
-        const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+      
+      // Проверяем по расширению, а не только по MIME-типу
+      const isAudio = file.type.startsWith('audio/') || 
+                      file.name.endsWith('.webm') ||
+                      file.name.endsWith('.wav') ||
+                      file.name.endsWith('.mp3') ||
+                      file.name.endsWith('.ogg') ||
+                      file.name.endsWith('.m4a');
+      
+      if (isAudio) {
+        const blob = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/webm' });
         await saveAudioFile(blob, file.name, collectionId);
       } else {
         console.warn('Not an audio file:', file.name);
@@ -83,24 +90,12 @@ const Library: React.FC = () => {
     }
   };
 
-  const handlePlayFile = async (file: AudioFile) => {
-    if (playingFileId === file.id) {
-      handleStopPlayback();
-      return;
-    }
-    // Останавливаем предыдущее воспроизведение
-    if (audioUrl) revokeUrl(audioUrl);
-    const url = await getFileUrl(file);
-    setAudioUrl(url);
-    setPlayingFileId(file.id);
+  const handlePlayFile = (file: AudioFile) => {
+    setCurrentPlayingFile(file);
   };
 
   const handleStopPlayback = () => {
-    if (audioUrl) {
-      revokeUrl(audioUrl);
-      setAudioUrl(null);
-    }
-    setPlayingFileId(null);
+    setCurrentPlayingFile(null);
   };
 
   const currentFiles = activeCollectionId
@@ -115,6 +110,13 @@ const Library: React.FC = () => {
         icon="📚"
         title="Аудиобиблиотека"
         description="Управление записями, коллекциями и файлами"
+      />
+
+      {/* Плеер с гистограммой */}
+      <AudioPlayerWithHistogram
+        currentFile={currentPlayingFile}
+        onPlay={handlePlayFile}
+        onStop={handleStopPlayback}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
@@ -140,15 +142,14 @@ const Library: React.FC = () => {
             </div>
             <UploadFileButton onUpload={handleUploadFiles} disabled={!activeCollectionId} />
           </div>
+          
           <FileList
             files={currentFiles}
             collections={otherCollectionsForMove}
-            onDeleteFile={(fileId) => setDeleteItem({ type: 'file', item: files.find(f => f.id === fileId) || null })}
+            onDeleteFile={handleDeleteFile}
             onMoveFile={handleMoveFile}
             onPlayFile={handlePlayFile}
-            playingFileId={playingFileId}
-            audioUrl={audioUrl}
-            onStopPlayback={handleStopPlayback}
+            currentPlayingFileId={currentPlayingFile?.id || null}
           />
         </div>
       </div>

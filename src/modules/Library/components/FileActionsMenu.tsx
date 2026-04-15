@@ -19,6 +19,18 @@ const FileActionsMenu: React.FC<FileActionsMenuProps> = ({
 
   const otherCollections = collections.filter(c => c.id !== file.collectionId);
 
+  const handleDownload = (file: AudioFile) => {
+    if (file.blob) {
+      const url = URL.createObjectURL(file.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+      console.log('Downloaded file for testing');
+    }
+  };
+
   return (
     <div className="relative">
       <button
@@ -63,6 +75,11 @@ const FileActionsMenu: React.FC<FileActionsMenuProps> = ({
           >
             🗑️ Удалить
           </button>
+          <button
+            onClick={() => handleDownload(file)}
+            className="btn btn-sm btn-circle btn-ghost"
+            title="Скачать"
+          >Скачать</button>
         </div>
       )}
     </div>

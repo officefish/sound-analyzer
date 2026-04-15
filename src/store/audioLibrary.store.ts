@@ -1,14 +1,23 @@
+// src/store/audioLibraryStore.ts
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { AudioLibraryState, AudioLibraryActions, AudioFile, AudioCollection } from '../types/audioLibrary';
 
-// Генерация ID
+declare global {
+  interface Window {
+    electronAPI?: {
+      saveAudioFile: (data: ArrayBuffer, filename: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+      getMediaPath: () => Promise<string>;
+      readFile: (path: string) => Promise<ArrayBuffer>;
+      deleteFile: (path: string) => Promise<boolean>;
+      listFiles: (dir: string) => Promise<string[]>;
+    };
+  }
+}
+
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-// Имя хранилища в localStorage
-const STORAGE_KEY = 'audio-library';
-
-// Дефолтная коллекция "Buffer"
 const DEFAULT_COLLECTION: AudioCollection = {
   id: 'buffer',
   name: 'Buffer',
@@ -32,11 +41,15 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       init: async () => {
         const isElectron = !!window.electronAPI;
         let mediaPath: string | null = null;
+        
         if (isElectron && window.electronAPI) {
           try {
             mediaPath = await window.electronAPI.getMediaPath();
             console.log(`📁 Media path: ${mediaPath}`);
-            // TODO: загрузить существующие файлы из папки media/buffer
+            
+            // TODO: загрузить существующие файлы из папки buffer
+            // const files = await window.electronAPI.listFiles(`${mediaPath}/buffer`);
+            // преобразовать в AudioFile[]
           } catch (error) {
             console.error('Failed to get media path:', error);
           }
@@ -48,19 +61,16 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
         const { isElectron, mediaPath } = get();
         const fileId = generateId();
         const createdAt = Date.now();
-        let savedFile: AudioFile | null = null;
-
+        
+        let newFile: AudioFile | null = null;
+        
         if (isElectron && mediaPath && window.electronAPI) {
-          // Сохраняем в файловую систему
+          // Electron: сохраняем в файловую систему
           const arrayBuffer = await blob.arrayBuffer();
-          
-          //const fullPath = `${mediaPath}/${collectionId}/${fileName}`;
-
-          // Создаём папку если нужно
-          // Упрощённо: предполагаем, что папка существует или создаётся в main процессе
           const result = await window.electronAPI.saveAudioFile(arrayBuffer, `${collectionId}/${fileName}`);
+          
           if (result.success && result.path) {
-            savedFile = {
+            newFile = {
               id: fileId,
               name: fileName,
               originalName: fileName,
@@ -70,12 +80,14 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
               createdAt,
               collectionId,
             };
+            console.log('💾 Saved to filesystem:', result.path);
           } else {
-            console.error('Save failed:', result.error);
+            console.error('Failed to save file:', result.error);
+            return null;
           }
         } else {
-          // Браузер: храним в памяти (blob)
-          savedFile = {
+          // Браузер: сохраняем в память (blob)
+          newFile = {
             id: fileId,
             name: fileName,
             originalName: fileName,
@@ -85,21 +97,19 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
             createdAt,
             collectionId,
           };
+          console.log('📀 Saved to memory (blob)');
         }
-
-        if (savedFile) {
-          set((state) => {
-            // Добавляем файл в коллекцию
-            const collections = state.collections.map(c =>
+        
+        if (newFile) {
+          set((state) => ({
+            files: [...state.files, newFile!],
+            collections: state.collections.map(c =>
               c.id === collectionId ? { ...c, fileIds: [...c.fileIds, fileId] } : c
-            );
-            return {
-              files: [...state.files, savedFile!],
-              collections,
-            };
-          });
+            ),
+          }));
         }
-        return savedFile;
+        
+        return newFile;
       },
 
       getFilesByCollection: (collectionId: string) => {
@@ -110,18 +120,14 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       },
 
       deleteFile: async (fileId: string) => {
-        const { 
-            files, 
-            //collections, 
-            isElectron } = get();
+        const { files, isElectron } = get();
         const file = files.find(f => f.id === fileId);
-        if (!file) return false;
-
-        if (isElectron && file.path && window.electronAPI) {
-          // Удаляем физический файл
+        
+        if (isElectron && file?.path && window.electronAPI) {
           await window.electronAPI.deleteFile(file.path);
+          console.log('🗑️ Deleted from filesystem:', file.path);
         }
-        // Удаляем из store
+        
         set((state) => {
           const newFiles = state.files.filter(f => f.id !== fileId);
           const newCollections = state.collections.map(c => ({
@@ -134,18 +140,15 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       },
 
       deleteCollection: async (collectionId: string) => {
-        if (collectionId === 'buffer') return false; // Не удаляем буфер
-        const { 
-            //files, 
-            collections } = get();
+        if (collectionId === 'buffer') return false;
+        const { //files, 
+        collections } = get();
         const collection = collections.find(c => c.id === collectionId);
         if (!collection) return false;
 
-        // Удаляем все файлы коллекции
         for (const fileId of collection.fileIds) {
           await get().deleteFile(fileId);
         }
-        // Удаляем коллекцию
         set((state) => ({
           collections: state.collections.filter(c => c.id !== collectionId),
         }));
@@ -165,14 +168,29 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
         return newCollection;
       },
 
+      updateCollection: async (id: string, newName: string) => {
+        if (id === 'buffer') return false;
+        set((state) => ({
+          collections: state.collections.map(c =>
+            c.id === id ? { ...c, name: newName } : c
+          ),
+        }));
+        return true;
+      },
+
       moveFileToCollection: async (fileId: string, targetCollectionId: string) => {
-        const { files, collections } = get();
+        const { files, isElectron, mediaPath } = get();
         const file = files.find(f => f.id === fileId);
         if (!file) return false;
-        const targetCollection = collections.find(c => c.id === targetCollectionId);
-        if (!targetCollection) return false;
-
-        // Удаляем из старой коллекции
+        
+        // В Electron нужно физически переместить файл
+        if (isElectron && file.path && mediaPath && window.electronAPI) {
+          const oldPath = file.path;
+          const newPath = oldPath.replace(/\/[^\/]+\//, `/${targetCollectionId}/`);
+          // TODO: реализовать перемещение файла в main процессе
+          console.log('Move file:', oldPath, '->', newPath);
+        }
+        
         const oldCollectionId = file.collectionId;
         set((state) => ({
           files: state.files.map(f =>
@@ -192,15 +210,19 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       },
 
       getFileUrl: async (file: AudioFile) => {
-        if (file.path && get().isElectron && window.electronAPI) {
-          // Для Electron: читаем файл и создаём blob URL
+        const { isElectron } = get();
+        
+        if (isElectron && file.path && window.electronAPI) {
+          // Electron: читаем файл и создаём blob URL
           const arrayBuffer = await window.electronAPI.readFile(file.path);
           const blob = new Blob([arrayBuffer], { type: file.type });
           return URL.createObjectURL(blob);
         } else if (file.blob) {
+          // Браузер: используем blob
           return URL.createObjectURL(file.blob);
         }
-        return '';
+        
+        throw new Error('No audio data available');
       },
 
       revokeUrl: (url: string) => {
@@ -208,32 +230,14 @@ export const useAudioLibraryStore = create<AudioLibraryState & AudioLibraryActio
       },
 
       setActiveCollectionId: (id) => set({ activeCollectionId: id }),
-
-      updateCollection: async (id, newName) => {
-        const { collections } = get();
-        const collection = collections.find(c => c.id === id);
-        if (!collection) return false;
-        if (collection.id === 'buffer') return false; // Не переименовываем Buffer
-        
-        set({
-            collections: collections.map(c =>
-            c.id === id ? { ...c, name: newName } : c
-            ),
-        });
-        return true;
-      },
-      
     }),
     {
-      name: STORAGE_KEY,
+      name: 'audio-library',
+      // Сохраняем только коллекции, активную коллекцию и метаданные файлов (без blob и path)
       partialize: (state) => ({
         collections: state.collections,
-        files: state.files.map(f => ({
-          ...f,
-          blob: undefined, // не сохраняем blob в localStorage
-          path: f.path,
-        })),
         activeCollectionId: state.activeCollectionId,
+        // files: state.files.map(f => ({ ...f, blob: undefined, path: f.path })), // можно сохранить метаданные
       }),
     }
   )

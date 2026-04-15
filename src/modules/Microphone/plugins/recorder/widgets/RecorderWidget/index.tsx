@@ -28,12 +28,12 @@ const RecorderWidget: React.FC<RecorderWidgetProps> = ({ plugin, context, onActi
   // Состояние записи
   const [isRecording, setIsRecording] = useState(false);
   const [isAutoRecording, setIsAutoRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
+  //const [duration, setDuration] = useState(0);
   const [recordingMode, setRecordingMode] = useState<RecordingMode>('manual');
   
   // Настройки
   const [intervalSeconds, setIntervalSeconds] = useState(30);
-  const [nextSaveIn, setNextSaveIn] = useState(30);
+  //const [nextSaveIn, setNextSaveIn] = useState(30);
   const [format, setFormat] = useState('webm');
   const [availableFormats, setAvailableFormats] = useState<FormatOption[]>([
     { format: 'webm', label: 'WEBM', available: true },
@@ -52,7 +52,7 @@ const RecorderWidget: React.FC<RecorderWidgetProps> = ({ plugin, context, onActi
   
   const durationRef = useRef<number | null>(null);
   const statsIntervalRef = useRef<number | null>(null);
-  const [showChunks, setShowChunks] = useState(false);
+  //const [showChunks, setShowChunks] = useState(false);
 
 // И функции:
 const handleMaxChunkSizeChange = (mb: number) => {
@@ -119,25 +119,27 @@ const handleMaxChunkSizeChange = (mb: number) => {
   // Таймер длительности записи
   useEffect(() => {
     if (isRecording) {
-      durationRef.current = window.setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
+      //durationRef.current = window.setInterval(() => {
+        //setDuration(prev => prev + 1);
+      //}, 1000);
     } else {
       if (durationRef.current) {
-        clearInterval(durationRef.current);
+        //clearInterval(durationRef.current);
         durationRef.current = null;
       }
-      setDuration(0);
+      //setDuration(0);
     }
     
     return () => {
-      if (durationRef.current) clearInterval(durationRef.current);
+      //if (durationRef.current) clearInterval(durationRef.current);
     };
   }, [isRecording]);
   
   // Таймер для UI интервала
+  /*
   useEffect(() => {
     if (isRecording && isAutoRecording) {
+      
       const timer = setInterval(() => {
         setNextSaveIn(prev => {
           if (prev <= 1) return intervalSeconds;
@@ -145,10 +147,12 @@ const handleMaxChunkSizeChange = (mb: number) => {
         });
       }, 1000);
       return () => clearInterval(timer);
+      
     } else {
-      setNextSaveIn(intervalSeconds);
+      //setNextSaveIn(intervalSeconds);
     }
   }, [isRecording, isAutoRecording, intervalSeconds]);
+  */
   
   // Переключение режима
   const handleModeChange = (mode: RecordingMode) => {

@@ -93,7 +93,9 @@ const Stopwatch: React.FC = () => {
   const pluginContext: IPluginContext = {
     moduleId: MODULE_ID as any,
     moduleState: state,
-    dispatch: (action: string, payload?: any) => {
+    dispatch: (action: string
+      //, payload?: any
+    ) => {
       switch (action) {
         case 'start': start(); break;
         case 'pause': pause(); break;
