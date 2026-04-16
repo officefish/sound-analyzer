@@ -1,19 +1,20 @@
-import { LapHistoryPlugin } from '../modules/Stopwatch/plugins/LapHistoryPlugin';
-import { SoundEffectPlugin } from '../modules/Stopwatch/plugins/SoundEffectPlugin';
+//import { LapHistoryPlugin } from '../modules/Stopwatch/plugins/LapHistoryPlugin';
+//import { SoundEffectPlugin } from '../modules/Stopwatch/plugins/SoundEffectPlugin';
 //import { NoiseGatePlugin } from '../modules/Microphone/plugins/NoiseGatePlugin';
 import { RecorderPlugin } from '../modules/Microphone/plugins/recorder/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
 // src/plugins/index.ts
 
 import { TuneMonitorPlugin } from '../modules/Microphone/plugins/TuneMonitorPlugin'; // ✅ Добавляем
+import { DetectorFFTPlugin } from '../modules/Microphone/plugins/fft/DetectorFFTPlugin';
 import { IPlugin } from '../types/plugins';
 
 // Список всех оригинальных плагинов
 export const ALL_PLUGINS: IPlugin[] = [
-  LapHistoryPlugin,
-  SoundEffectPlugin,
+  //LapHistoryPlugin,
+  //SoundEffectPlugin,
   RecorderPlugin,
-  //NoiseGatePlugin,
+  DetectorFFTPlugin,
   TuneMonitorPlugin, 
 ];
 
@@ -31,9 +32,9 @@ export const registerAllPlugins = () => {
 };
 
 export {
-  LapHistoryPlugin,
-  SoundEffectPlugin,
-  //NoiseGatePlugin,
+  //LapHistoryPlugin,
+  //SoundEffectPlugin,
+  DetectorFFTPlugin,
   RecorderPlugin,
   TuneMonitorPlugin,
 };

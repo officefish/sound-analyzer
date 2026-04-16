@@ -192,12 +192,14 @@ class TuneMonitorPluginClass implements IPlugin {
     console.log('🎵 Tune Monitor Plugin deactivated');
   }
   
-  onModuleEvent(event: string, data: any): void {
-    console.log(`🎵 Tune Monitor event: ${event}`, data);
+  onModuleEvent(
+    //event: string, data: any
+  ): void {
+    //console.log(`🎵 Tune Monitor event: ${event}`, data);
   }
   
   execute(action: string, data?: any): any {
-    console.log(`🎵 TuneMonitor execute: ${action}`, data);
+    //console.log(`🎵 TuneMonitor execute: ${action}`, data);
     
     switch (action) {
       case 'setWidgetState':

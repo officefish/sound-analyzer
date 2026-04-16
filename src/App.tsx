@@ -4,24 +4,25 @@ import { MODULES, ModuleType } from './types/modules';
 import Sidebar from './components/Navigation/Sidebar';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
-import Library from './modules/Library';
+//import Library from './modules/Library';
 
 // Ленивая загрузка модулей
-const Stopwatch = lazy(() => import('./modules/Stopwatch'));
+//const Stopwatch = lazy(() => import('./modules/Stopwatch'));
 //const Microphone = lazy(() => import('./modules/Microphone'));
 const Microphone = lazy(() => import('./modules/Microphone'));
+const Library = lazy(() => import('./modules/Library'));
 
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
-  stopwatch: Stopwatch,
+  //stopwatch: Stopwatch,
   microphone: Microphone,
   library: Library,
 };
 
 // Обновляем MODULES с реальными компонентами
-MODULES[0].component = Stopwatch;
-MODULES[1].component = Microphone;
-MODULES[2].component = Microphone;
+//MODULES[0].component = Stopwatch;
+MODULES[0].component = Microphone;
+MODULES[1].component = Library;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();

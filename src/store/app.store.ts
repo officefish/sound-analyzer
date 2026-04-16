@@ -30,7 +30,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       // Текущее приложение
-      currentApp: 'stopwatch',
+      currentApp: 'microphone',
       setCurrentApp: (app) => 
         set((state) => {
           // Увеличиваем счётчик при смене приложения
