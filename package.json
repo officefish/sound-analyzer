@@ -17,7 +17,8 @@
     "build:electron": "tsc --project tsconfig.electron.json",
     "build:react": "vite build",
     "dist": "npm run build:electron && npm run build && electron-builder",
-    "dist:win": "npm run build:electron && npm run build && electron-builder --config electron-builder.json --win"
+    "dist:win": "npm run build:electron && npm run build && electron-builder --config electron-builder.json --win",
+    "release:exe": "\"C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Membrana\\Membrana.exe\" --enable-logging --log-file=\"%APPDATA%\\Membrana\\logs\\app.log\" --verbose 2>&1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

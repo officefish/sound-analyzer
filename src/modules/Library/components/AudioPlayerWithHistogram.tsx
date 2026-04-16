@@ -1,11 +1,9 @@
 // src/modules/Library/components/AudioPlayerWithHistogram.tsx
 
-import React, { useState, useEffect, useRef
-  //, useCallback 
-} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AudioFile } from '../../../types/audioLibrary';
-import { audioLibrary } from '../../../lib/audioLibrary';
 import { audioPlayback } from '../../../services/AudioPlaybackService';
+import { useAudioLibrary } from '../../../hooks/useAudioLibrary';
 
 interface AudioPlayerWithHistogramProps {
   onPlay?: (file: AudioFile) => void;
@@ -16,6 +14,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
   onPlay,
   onStop,
 }) => {
+  const { isElectron } = useAudioLibrary();
   const [currentFile, setCurrentFile] = useState<AudioFile | null>(null);
   const [trackName, setTrackName] = useState<string>('Нет трека');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -24,47 +23,75 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
   const [volume, setVolume] = useState<number>(0.8);
   const [amplitudes, setAmplitudes] = useState<number[]>([]);
   const [playedBarsCount, setPlayedBarsCount] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isMetadataLoaded, setIsMetadataLoaded] = useState<boolean>(false);
   
   const histogramContainerRef = useRef<HTMLDivElement | null>(null);
+  const animationRef = useRef<number | null>(null);
 
-  // Подписка на изменения состояния воспроизведения
+  // Прогресс вычисляем напрямую
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Анимация обновления времени (только после загрузки метаданных)
   useEffect(() => {
-    // В компоненте AudioPlayerWithHistogram, добавим эффект для отслеживания currentTime
-
-    // Уже есть useEffect для подписки на statechange, он должен обновлять playedBarsCount.
-    // Проверим, что в handleStateChange правильно обновляется playedBarsCount:
-
-    const handleStateChange = (state: any) => {
-      console.log('🎵 Player state changed:', state);
-      
-      if (state.currentFile) {
-        setCurrentFile(state.currentFile);
-        setTrackName(state.currentFile.name.length > 42 
-          ? state.currentFile.name.slice(0, 39) + '...' 
-          : state.currentFile.name);
-        setIsPlaying(state.isPlaying);
-        setCurrentTime(state.currentTime);
-        setDuration(state.duration);
-        
-        // Синхронизируем playedBarsCount из состояния
-        if (amplitudes.length > 0 && state.duration > 0) {
-          const progressRatio = state.currentTime / state.duration;
+    if (!isPlaying || !isMetadataLoaded) return;
+    
+    const updateTime = () => {
+      const newTime = audioPlayback.getCurrentTime();
+      const newDuration = audioPlayback.getDuration();
+      setCurrentTime(newTime);
+      if (newDuration > 0) {
+        setDuration(newDuration);
+        if (amplitudes.length > 0) {
+          const progressRatio = newTime / newDuration;
           const played = Math.floor(progressRatio * amplitudes.length);
           setPlayedBarsCount(Math.min(amplitudes.length, Math.max(0, played)));
         }
-        
-        if (state.isPlaying) {
-          onPlay?.(state.currentFile);
-        }
-      } else {
-        setCurrentFile(null);
-        setTrackName('Нет трека');
-        setIsPlaying(false);
-        setCurrentTime(0);
-        setDuration(0);
-        setPlayedBarsCount(0);
-        onStop?.();
       }
+      animationRef.current = requestAnimationFrame(updateTime);
+    };
+    
+    animationRef.current = requestAnimationFrame(updateTime);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [isPlaying, isMetadataLoaded, amplitudes.length]);
+
+  // Подписка на события воспроизведения
+  useEffect(() => {
+    const handlePlay = async () => {
+      const file = audioPlayback.getCurrentFile();
+      if (file) {
+        setCurrentFile(file);
+        setTrackName(file.name.length > 42 ? file.name.slice(0, 39) + '...' : file.name);
+        setIsPlaying(true);
+        
+        // Получаем duration напрямую
+        const dur = audioPlayback.getDuration();
+        if (dur > 0) {
+          setDuration(dur);
+          setIsMetadataLoaded(true);
+        } else {
+          // Если duration ещё не загружена, ждём немного
+          setTimeout(() => {
+            const newDur = audioPlayback.getDuration();
+            if (newDur > 0) {
+              setDuration(newDur);
+              setIsMetadataLoaded(true);
+            }
+          }, 100);
+        }
+        
+        onPlay?.(file);
+      }
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
     };
 
     const handleStop = () => {
@@ -74,101 +101,44 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
       setCurrentTime(0);
       setDuration(0);
       setPlayedBarsCount(0);
+      setIsMetadataLoaded(false);
       onStop?.();
     };
 
-    audioPlayback.on('statechange', handleStateChange);
+    const handleLoadedMetadata = ({ duration: dur }: { duration: number }) => {
+      setDuration(dur);
+      setIsMetadataLoaded(true);
+    };
+
+    audioPlayback.on('play', handlePlay);
+    audioPlayback.on('pause', handlePause);
     audioPlayback.on('stop', handleStop);
-    audioPlayback.on('ended', handleStop);
+    audioPlayback.on('loadedmetadata', handleLoadedMetadata);
 
     return () => {
-      audioPlayback.off('statechange', handleStateChange);
+      audioPlayback.off('play', handlePlay);
+      audioPlayback.off('pause', handlePause);
       audioPlayback.off('stop', handleStop);
-      audioPlayback.off('ended', handleStop);
+      audioPlayback.off('loadedmetadata', handleLoadedMetadata);
     };
-  }, [amplitudes.length, onPlay, onStop]);
+  }, [onPlay, onStop]);
 
-  // Загрузка амплитуд при смене файла
+  // Загрузка волны через сервис
   useEffect(() => {
     if (!currentFile) {
       setAmplitudes([]);
       return;
     }
 
-    const loadAmplitudes = async () => {
-      try {
-        let blob: Blob;
-        if (currentFile.blob) {
-          blob = currentFile.blob;
-        } else if (currentFile.path) {
-          const url = await audioLibrary.getFileUrl(currentFile);
-          const response = await fetch(url);
-          blob = await response.blob();
-          audioLibrary.revokeUrl(url);
-        } else {
-          throw new Error('No audio data');
-        }
-
-        const computedAmplitudes = await computeAmplitudesFromBlob(blob);
-        setAmplitudes(computedAmplitudes);
-      } catch (err) {
-        console.error('Ошибка при анализе аудио:', err);
-        setAmplitudes([]);
-      }
+    const loadWaveform = async () => {
+      setIsLoading(true);
+      const waveform = await audioPlayback.generateWaveform(currentFile, 200);
+      setAmplitudes(waveform);
+      setIsLoading(false);
     };
 
-    loadAmplitudes();
+    loadWaveform();
   }, [currentFile]);
-
-  // Получение амплитуд из аудиофайла
-  const computeAmplitudesFromBlob = async (blob: Blob): Promise<number[]> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const arrayBuffer = e.target?.result as ArrayBuffer;
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const decoded = await audioContext.decodeAudioData(arrayBuffer);
-          const rawData = decoded.getChannelData(0);
-          const targetBars = 200;
-          const samplesPerBar = Math.floor(rawData.length / targetBars);
-          
-          if (samplesPerBar < 1) {
-            const shortBars = Array.from(rawData).map(v => Math.min(1.0, Math.abs(v) * 1.5));
-            resolve(shortBars);
-            audioContext.close();
-            return;
-          }
-          
-          const bars: number[] = [];
-          for (let i = 0; i < targetBars; i++) {
-            let start = i * samplesPerBar;
-            let end = start + samplesPerBar;
-            if (end > rawData.length) end = rawData.length;
-            let maxAmp = 0;
-            for (let s = start; s < end; s++) {
-              const val = Math.abs(rawData[s]);
-              if (val > maxAmp) maxAmp = val;
-            }
-            let normalized = Math.min(1.0, maxAmp * 1.25);
-            bars.push(normalized);
-          }
-          
-          // Сглаживание
-          for (let i = 1; i < bars.length - 1; i++) {
-            bars[i] = (bars[i - 1] + bars[i] + bars[i + 1]) / 3;
-          }
-          
-          audioContext.close();
-          resolve(bars);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(blob);
-    });
-  };
 
   const formatTime = (seconds: number): string => {
     if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) return '0:00';
@@ -191,9 +161,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
       const newTime = seekRatio * duration;
       if (isFinite(newTime)) {
         audioPlayback.seek(newTime);
-        // Обновляем локально для мгновенного отклика
-        const played = Math.min(amplitudes.length, Math.max(0, index + 1));
-        setPlayedBarsCount(played);
+        setPlayedBarsCount(index + 1);
       }
     }
   };
@@ -207,7 +175,6 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
         const newTime = ratio * duration;
         if (isFinite(newTime)) {
           audioPlayback.seek(newTime);
-          // Обновляем локально для мгновенного отклика
           const played = Math.floor(ratio * amplitudes.length);
           setPlayedBarsCount(Math.min(amplitudes.length, Math.max(0, played)));
         }
@@ -231,15 +198,18 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
     }
   };
 
-  const progressPercent = amplitudes.length > 0 
-  ? (playedBarsCount / amplitudes.length) * 100 
-  : 0;
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+    const audio = document.querySelector('audio');
+    if (audio) audio.volume = newVolume;
+  };
 
   return (
     <div className="bg-base-200 rounded-2xl p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex-1">
-          <div className="text-sm text-primary">Сейчас играет</div>
+          <div className="text-sm text-base-content/50">Сейчас играет</div>
           <div className="font-medium text-base-content truncate">
             🎵 {trackName}
           </div>
@@ -252,14 +222,8 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
             max="1"
             step="0.01"
             value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-24 h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer
-              [&::-webkit-slider-thumb]:appearance-none 
-              [&::-webkit-slider-thumb]:w-3 
-              [&::-webkit-slider-thumb]:h-3 
-              [&::-webkit-slider-thumb]:rounded-full 
-              [&::-webkit-slider-thumb]:bg-primary 
-              [&::-webkit-slider-thumb]:cursor-pointer"
+            onChange={handleVolumeChange}
+            className="w-24 h-1.5 bg-gray-600 rounded-lg appearance-none cursor-pointer"
           />
         </div>
       </div>
@@ -270,21 +234,23 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
           ref={histogramContainerRef}
           onClick={handleContainerClick}
         >
-          {amplitudes.length === 0 ? (
+          {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center text-base-content/50">
+              <div className="animate-pulse">🎵 Загрузка波形...</div>
+            </div>
+          ) : amplitudes.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center text-base-content/50">
               🎧 Выберите трек, чтобы увидеть гистограмму
             </div>
           ) : (
             amplitudes.map((amp, idx) => {
-              const height = Math.min(1.0, amp * 1.15) * 170;
+              const height = amp * 170;
               const isPlayed = idx < playedBarsCount;
               return (
                 <span
                   key={idx}
-                  className={`flex-1 rounded-t-sm transition-all duration-75 cursor-pointer hover:scale-y-110 ${
-                    isPlayed 
-                      ? 'bg-primary shadow-[0_0_4px_rgba(var(--primary),0.5)]' 
-                      : 'bg-base-300'
+                  className={`flex-1 rounded-t-sm transition-all duration-75 cursor-pointer hover:scale-y-110 hover:brightness-110 ${
+                    isPlayed ? 'bg-primary' : 'bg-primary/20'
                   }`}
                   style={{ height: `${Math.max(4, height)}px` }}
                   onClick={() => handleBarClick(idx)}
@@ -302,7 +268,7 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-      </div>
+        </div>
         
         <div className="flex justify-between text-xs text-base-content/50 mt-2">
           <span>🎵 {formatTime(currentTime)}</span>
@@ -335,9 +301,15 @@ const AudioPlayerWithHistogram: React.FC<AudioPlayerWithHistogramProps> = ({
         </button>
       </div>
       
-      <div className="text-center text-[10px] text-info mt-3">
+      <div className="text-center text-[10px] text-base-content/40 mt-3">
         ✨ Наведи на столбец — он подсвечивается | Клик — перемотка | Цветные = прослушано
       </div>
+      
+      {isElectron && amplitudes.length > 0 && (
+        <div className="text-center text-[9px] text-base-content/30 mt-2">
+          🎵 Визуализация — демонстрационная (псевдо-волна)
+        </div>
+      )}
     </div>
   );
 };

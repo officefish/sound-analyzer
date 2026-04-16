@@ -1,15 +1,3 @@
-// electron/main.ts
-
-/*
-// electron/main.ts
-
-
-
-
-
-
-// ... остальной код без изменений
-*/
 
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'path';
@@ -31,6 +19,128 @@ const userDataPath = app.getPath('userData');
 const mediaPath = path.join(userDataPath, 'media');
 const logsPath = path.join(userDataPath, 'logs');
 
+// Создаём папку для логов
+if (!fs.existsSync(logsPath)) {
+  fs.mkdirSync(logsPath, { recursive: true });
+}
+
+// Перехват всех console методов
+try {
+  if (!fs.existsSync(logsPath)) {
+    fs.mkdirSync(logsPath, { recursive: true });
+  }
+} catch (error) {
+  console.error('Failed to create logs directory:', error);
+}
+
+// ✅ Простая функция логирования без рекурсии
+function logToFile(message: string, level: 'info' | 'error' | 'warn' = 'info') {
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (error) {
+    // Не вызываем logToFile, чтобы избежать рекурсии
+    console.error('Failed to write log:', error);
+  }
+}
+
+// ✅ Сохраняем оригинальные методы console
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+// ✅ Переопределяем console методы без рекурсии
+console.log = (...args) => {
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+  ).join(' ');
+  // Пишем в файл (без вызова console.log)
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [INFO] ${message}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (error) {
+    // Игнорируем ошибки записи в файл
+  }
+  // Вызываем оригинальный console.log для вывода в терминал
+  originalConsoleLog(...args);
+};
+
+console.error = (...args) => {
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+  ).join(' ');
+  // Пишем в файл (без вызова console.error)
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [ERROR] ${message}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (error) {
+    // Игнорируем ошибки записи в файл
+  }
+  // Вызываем оригинальный console.error для вывода в терминал
+  originalConsoleError(...args);
+};
+
+console.warn = (...args) => {
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+  ).join(' ');
+  // Пишем в файл (без вызова console.warn)
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [WARN] ${message}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (error) {
+    // Игнорируем ошибки записи в файл
+  }
+  // Вызываем оригинальный console.warn для вывода в терминал
+  originalConsoleWarn(...args);
+};
+
+// Перехват необработанных ошибок
+process.on('uncaughtException', (error) => {
+  const errorMsg = `UNCAUGHT EXCEPTION: ${error.message}\n${error.stack}`;
+  originalConsoleError(errorMsg);
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [ERROR] ${errorMsg}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (e) {
+    // Игнорируем
+  }
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});
+
+process.on('unhandledRejection', (reason) => {
+  const errorMsg = `UNHANDLED REJECTION: ${reason}`;
+  originalConsoleError(errorMsg);
+  try {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [ERROR] ${errorMsg}\n`;
+    const today = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logsPath, `app-${today}.log`);
+    fs.appendFileSync(logFile, logMessage);
+  } catch (e) {
+    // Игнорируем
+  }
+});
+
+// ... остальной код без изменений
+
 // Инициализация папок
 async function initDirectories() {
   try {
@@ -48,30 +158,27 @@ async function initDirectories() {
       await mkdir(bufferPath, { recursive: true });
       console.log(`📁 Created buffer directory: ${bufferPath}`);
     }
-    
-    if (!fs.existsSync(logsPath)) {
-      await mkdir(logsPath, { recursive: true });
-      console.log(`📁 Created logs directory: ${logsPath}`);
-    }
   } catch (error) {
     console.error('Failed to create directories:', error);
   }
 }
 
+// Перехват необработанных ошибок
+process.on('uncaughtException', (error) => {
+  const errorMsg = `UNCAUGHT EXCEPTION: ${error.message}\n${error.stack}`;
+  logToFile(errorMsg, 'error');
+  console.error(errorMsg);
+  // Не выходим сразу, даём возможность записать лог
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});
 
-// Функция для записи логов
-function logToFile(message: string, level: 'info' | 'error' | 'warn' = 'info') {
-  if (!logsPath) return;
-  const timestamp = new Date().toISOString();
-  const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
-  const logFile = path.join(logsPath, `app-${new Date().toISOString().slice(0, 10)}.log`);
-  try {
-    fs.appendFileSync(logFile, logMessage);
-  } catch (error) {
-    console.error('Failed to write log:', error);
-  }
-  console.log(logMessage);
-}
+process.on('unhandledRejection', (reason) => {
+  const errorMsg = `UNHANDLED REJECTION: ${reason}`;
+  logToFile(errorMsg, 'error');
+  console.error(errorMsg);
+});
 
 // Перехват необработанных ошибок
 process.on('uncaughtException', (error) => {
@@ -93,6 +200,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      //hardwareAcceleration: false, // Отключаем аппаратное ускорение
     },
     icon: path.join(__dirname, '../build/icon.ico'),
     show: false,
@@ -116,6 +224,14 @@ function createWindow() {
     }
   });
 
+  // ✅ Отключаем аппаратное ускорение через командную строку
+  // app.disableHardwareAcceleration();
+  // app.commandLine.appendSwitch('disable-gpu');
+  // app.commandLine.appendSwitch('disable-software-rasterizer');
+  // app.commandLine.appendSwitch('disable-gpu-sandbox');
+  // app.commandLine.appendSwitch('disable-gpu-compositing');
+  // app.commandLine.appendSwitch('disable-gpu-vsync');
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
@@ -123,6 +239,19 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    const errorMsg = `Render process gone: ${details.reason}`;
+    logToFile(errorMsg, 'error');
+    console.error(errorMsg);
+  });
+
+  mainWindow.webContents.on('crashed', (event) => {
+    const errorMsg = 'Renderer process crashed';
+    logToFile(errorMsg, 'error');
+    console.error(errorMsg);
+  });
+
 }
 
 // IPC Handlers

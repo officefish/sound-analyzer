@@ -12,4 +12,5 @@ electron_1.contextBridge.exposeInMainWorld('electronAPI', {
     deleteCollection: (path) => electron_1.ipcRenderer.invoke('delete-collection', path),
     moveFile: (filePath, targetCollectionPath) => electron_1.ipcRenderer.invoke('move-file', filePath, targetCollectionPath),
     renameCollection: (oldPath, newPath) => electron_1.ipcRenderer.invoke('rename-collection', oldPath, newPath),
+    logError: (message) => electron_1.ipcRenderer.send('log-error', message),
 });

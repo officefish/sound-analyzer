@@ -6,22 +6,6 @@ import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 import Library from './modules/Library';
 
-// Типы для Electron
-declare global {
-  interface Window {
-    electronAPI?: {
-      getMediaPath: () => Promise<string>;
-      saveAudioFile: (data: ArrayBuffer, filename: string, collectionName?: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      readFile: (path: string) => Promise<ArrayBuffer>;
-      deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>;
-      listMedia: () => Promise<{ success: boolean; collections?: any[]; error?: string }>;
-      createCollection: (name: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      deleteCollection: (path: string) => Promise<{ success: boolean; error?: string }>;
-      moveFile: (filePath: string, targetCollectionPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-    };
-  }
-}
-
 // Ленивая загрузка модулей
 const Stopwatch = lazy(() => import('./modules/Stopwatch'));
 //const Microphone = lazy(() => import('./modules/Microphone'));

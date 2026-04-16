@@ -1,0 +1,3 @@
+@echo off
+echo Starting Membrana with logging...
+echo Logs will be saved to %APPDATA%\Membrana\logs\

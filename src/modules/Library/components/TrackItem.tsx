@@ -20,78 +20,68 @@ const TrackItem: React.FC<TrackItemProps> = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState<number>(0);
 
-  // Предзагрузка длительности файла
+  const handleLoadedMetadata = ({ duration: dur }: { duration: number }) => {
+    setDuration(dur);
+  };
+
+  // Подписка на события воспроизведения
   useEffect(() => {
-    const loadDuration = async () => {
-      if (!duration && file.size) {
-        const loadedDuration = await audioPlayback.preloadMetadata(file);
-        if (loadedDuration > 0) {
-          setDuration(loadedDuration);
-        }
+    const handlePlay = () => {
+      const currentFile = audioPlayback.getCurrentFile();
+      if (currentFile?.id === file.id) {
+        setIsPlaying(true);
       }
     };
-    loadDuration();
-  }, [file]);
 
-  // Подписка на изменения состояния воспроизведения
-  useEffect(() => {
-    const handleStateChange = (state: any) => {
-      if (state && state.currentFile) {
-        const isThisPlaying = state.currentFile.id === file.id && state.isPlaying;
-        setIsPlaying(isThisPlaying);
-        
-        if (state.duration > 0) {
-          setDuration(state.duration);
-          const calculatedProgress = (state.currentTime / state.duration) * 100;
-          setProgress(Math.min(100, Math.max(0, calculatedProgress)));
-        }
-      } else {
+    const handlePause = () => {
+      const currentFile = audioPlayback.getCurrentFile();
+      if (currentFile?.id === file.id) {
         setIsPlaying(false);
-        setProgress(0);
       }
+    };
+
+    const handleStop = () => {
+      setIsPlaying(false);
+      setProgress(0);
     };
 
     const handleTimeUpdate = ({ currentTime }: { currentTime: number }) => {
       const currentFile = audioPlayback.getCurrentFile();
       if (currentFile?.id === file.id) {
-        const currentDuration = audioPlayback.getDuration();
-        if (currentDuration > 0) {
-          setDuration(currentDuration);
-          const calculatedProgress = (currentTime / currentDuration) * 100;
-          setProgress(Math.min(100, Math.max(0, calculatedProgress)));
+        const duration = audioPlayback.getDuration();
+        if (duration > 0) {
+          const newProgress = (currentTime / duration) * 100;
+          setProgress(Math.min(100, Math.max(0, newProgress)));
         }
       }
     };
 
-    // Начальное обновление
-    const initialState = audioPlayback.getState();
-    if (initialState.currentFile && initialState.currentFile.id === file.id) {
-      setIsPlaying(initialState.isPlaying);
-      if (initialState.duration > 0) {
-        setDuration(initialState.duration);
-        const calculatedProgress = (initialState.currentTime / initialState.duration) * 100;
-        setProgress(Math.min(100, Math.max(0, calculatedProgress)));
+    // Начальное состояние
+    const currentFile = audioPlayback.getCurrentFile();
+    if (currentFile?.id === file.id) {
+      setIsPlaying(audioPlayback.isPlaying());
+      const duration = audioPlayback.getDuration();
+      const currentTime = audioPlayback.getCurrentTime();
+      if (duration > 0) {
+        const newProgress = (currentTime / duration) * 100;
+        setProgress(Math.min(100, Math.max(0, newProgress)));
       }
     }
 
-    audioPlayback.on('statechange', handleStateChange);
+    audioPlayback.on('play', handlePlay);
+    audioPlayback.on('pause', handlePause);
+    audioPlayback.on('stop', handleStop);
     audioPlayback.on('timeupdate', handleTimeUpdate);
-    audioPlayback.on('stop', () => {
-      setIsPlaying(false);
-      setProgress(0);
-    });
-    audioPlayback.on('ended', () => {
-      setIsPlaying(false);
-      setProgress(0);
-    });
+    audioPlayback.on('loadedmetadata', handleLoadedMetadata);
 
     return () => {
-      audioPlayback.off('statechange', handleStateChange);
+      audioPlayback.off('play', handlePlay);
+      audioPlayback.off('pause', handlePause);
+      audioPlayback.off('stop', handleStop);
       audioPlayback.off('timeupdate', handleTimeUpdate);
-      audioPlayback.off('stop', () => {});
-      audioPlayback.off('ended', () => {});
+      audioPlayback.off('loadedmetadata', handleLoadedMetadata);
     };
   }, [file.id]);
 
@@ -130,6 +120,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
 
   return (
     <div className="bg-base-300 rounded-xl transition-all overflow-hidden relative">
+      {/* Прогресс-бар фона */}
       <div 
         className="absolute top-0 bottom-0 bg-primary/20 transition-all duration-100 pointer-events-none"
         style={{ width: `${progress}%`, left: 0 }}

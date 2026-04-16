@@ -15,4 +15,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('move-file', filePath, targetCollectionPath),
   renameCollection: (oldPath: string, newPath: string) => 
     ipcRenderer.invoke('rename-collection', oldPath, newPath),
+  logError: (message: string) => ipcRenderer.send('log-error', message),
 });
