@@ -5,6 +5,7 @@ import { IPlugin } from '../../../../../types/plugins';
 import PluginCard from '../../../../../components/ui/PluginCard';
 import TickStatus from '../components/TickStatus';
 import { TickState } from '../DetectorFFTPlugin';
+import DetectorFFTHelp from '../../../../../components/popup/DetectorFFTHelp';
 
 type StrictnessLevel = 'sensitive' | 'normal' | 'rough';
 type DetectionMode = 'auto' | 'manual';
@@ -48,6 +49,9 @@ const DetectorFFTWidget: React.FC<DetectorFFTWidgetProps> = ({
   const [currentTickIndex, setCurrentTickIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
   
   // Настройки детектора
   const [config, setConfig] = useState({
@@ -133,7 +137,7 @@ const DetectorFFTWidget: React.FC<DetectorFFTWidgetProps> = ({
 
   const paramsStatus = getParamsStatus();
   const isMicActive = context?.isRecording || false;
-  const progressPercent = neededSamples > 0 ? (samplesCollected / neededSamples) * 100 : 0;
+  //const progressPercent = neededSamples > 0 ? (samplesCollected / neededSamples) * 100 : 0;
   const successRate = totalAnalyses > 0 ? (successfulDetections / totalAnalyses) * 100 : 0;
 
   // Обработчики
@@ -159,8 +163,8 @@ const DetectorFFTWidget: React.FC<DetectorFFTWidgetProps> = ({
   // Кнопки управления
   const canStartManual = detectionMode === 'manual' && !isCollecting && isMicActive;
   const canStop = isCollecting;
-  const isAutoWaiting = detectionMode === 'auto' && !isAnalyzing && isMicActive;
-  const isAutoActive = detectionMode === 'auto' && isAnalyzing;
+  //const isAutoWaiting = detectionMode === 'auto' && !isAnalyzing && isMicActive;
+  //const isAutoActive = detectionMode === 'auto' && isAnalyzing;
 
   return (
     <PluginCard plugin={plugin} isActive={isActive}>
@@ -542,9 +546,22 @@ const DetectorFFTWidget: React.FC<DetectorFFTWidgetProps> = ({
 
         <div className="text-[10px] text-gray-500 flex justify-between">
           <span>{isMicActive ? '🎤 Микрофон активен' : '⏸ Микрофон выключен'}</span>
-          <span>🎛️ v{plugin.version}</span>
+          <div>
+                <button
+                    onClick={() => setShowHelpModal(true)}
+                    className="text-xs text-info hover:text-info/80 transition-colors"
+                    title="Что означают параметры?"
+                >
+                    ❓ Справка
+                </button>
+                <span className='ml-4'>🎛️ v{plugin.version}</span>
+            </div>
         </div>
       </div>
+      <DetectorFFTHelp 
+        isOpen={showHelpModal} 
+        onClose={() => setShowHelpModal(false)} 
+      />
     </PluginCard>
   );
 };

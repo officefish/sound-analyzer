@@ -1,6 +1,6 @@
 import { IPluginContext } from './plugins';
 
-export type ModuleType = 'microphone' | 'library' // | 'stopwatch' // | 'proccessing';
+export type ModuleType = 'microphone' | 'library'  | 'journal' // | 'proccessing';
 
 export interface IModule {
   id: ModuleType;
@@ -11,13 +11,6 @@ export interface IModule {
 }
 
 export const MODULES: IModule[] = [
-  // {
-  //   id: 'stopwatch',
-  //   name: 'Секундомер',
-  //   icon: '⏱',
-  //   description: 'Измерение времени с кругами',
-  //   component: () => null,
-  // },
   {
     id: 'microphone',
     name: 'Microphone',
@@ -30,6 +23,13 @@ export const MODULES: IModule[] = [
     name: 'Библиотека',
     icon: '📚',
     description: 'Управление аудиофайлами и коллекциями',
+    component: () => null,
+  },
+  {
+    id: 'journal',
+    name: 'Журнал',
+    icon: '📋',
+    description: 'Журнал со всеми аналитическими операциями',
     component: () => null,
   },
   // {

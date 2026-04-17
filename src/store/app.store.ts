@@ -18,7 +18,7 @@ interface AppState {
   
   // Счётчик переходов для статистики
   navigationCount: {
-    stopwatch: number;
+    journal: number;
     microphone: number;
     library: number;
   };
@@ -55,7 +55,7 @@ export const useAppStore = create<AppState>()(
       
       // Статистика навигации
       navigationCount: {
-        stopwatch: 0,
+        journal: 0,
         microphone: 0,
         library: 0,
       },

@@ -8,15 +8,15 @@ import Footer from './components/Layout/Footer';
 
 // Ленивая загрузка модулей
 //const Stopwatch = lazy(() => import('./modules/Stopwatch'));
-//const Microphone = lazy(() => import('./modules/Microphone'));
+const Journal = lazy(() => import('./modules/Journal'));
 const Microphone = lazy(() => import('./modules/Microphone'));
 const Library = lazy(() => import('./modules/Library'));
 
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
-  //stopwatch: Stopwatch,
   microphone: Microphone,
   library: Library,
+  journal: Journal,
 };
 
 // Обновляем MODULES с реальными компонентами
