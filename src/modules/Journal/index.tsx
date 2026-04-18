@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// src/modules/Journal/index.tsx
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTelemetryStore, TelemetryEntry } from '../../store/telemetry.store';
-import ModuleHeader from '../../components/ui/ModuleHeader';
-import JournalEntry from './components/JournalEntry';
-import JournalFilters from './components/JournalFilters';
-import JournalStats from './components/JournalStats';
-import JournalExport from './components/JournalExport';
+import FFTTrendsReportViewer from './components/FFTTrendsReportViewer';
+import DetectionReportViewer from './components/DetectionReportViewer';
 import { JournalFilters as JournalFiltersType } from './types';
+import JournalFilters from './components/JournalFilters';
+import JournalExport from './components/JournalExport';
+import JournalStats from './components/JournalStats';
+import ModuleHeader from '../../components/ui/ModuleHeader';
+
 
 const getTagPriority = (entry: TelemetryEntry): number => {
   if (entry.type === 'analysis' && entry.data?.tags) {
@@ -19,7 +23,9 @@ const getTagPriority = (entry: TelemetryEntry): number => {
 };
 
 const Journal: React.FC = () => {
-  const { entries, clearEntries, getStats } = useTelemetryStore();
+   const { entries, clearEntries, getStats } = useTelemetryStore();
+  const telemetryStore = useTelemetryStore();
+
   const [filters, setFilters] = useState<JournalFiltersType>({
     type: 'all',
     sortOrder: 'desc',
@@ -27,7 +33,7 @@ const Journal: React.FC = () => {
   const [displayEntries, setDisplayEntries] = useState<TelemetryEntry[]>([]);
   const [stats, setStats] = useState(getStats());
 
-  useEffect(() => {
+    useEffect(() => {
     setStats(getStats());
   }, [entries, getStats]);
 
@@ -84,6 +90,7 @@ const Journal: React.FC = () => {
     setDisplayEntries(filtered);
   }, [entries, filters]);
 
+  
   const handleFilterChange = (newFilters: Partial<JournalFiltersType>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
   };
@@ -93,9 +100,64 @@ const Journal: React.FC = () => {
       clearEntries();
     }
   };
-
+  
+  const renderEntry = (entry: TelemetryEntry) => {
+    try {
+      // Проверяем наличие данных
+      if (!entry || !entry.data) {
+        return (
+          <div className="bg-base-200 rounded-xl border border-base-300 overflow-hidden mb-3 p-4">
+            <div className="text-center text-gray-500">
+              ⚠️ Некорректная запись
+            </div>
+          </div>
+        );
+      }
+      
+      // Для отчётов TrendsFFTDetector
+      if (entry.moduleName === 'TrendsFFTDetector' && entry.type === 'analysis') {
+        return <FFTTrendsReportViewer report={entry.data} />;
+      }
+      
+      // Для отчётов FFTDetector
+      if (entry.moduleName === 'FFTDetector' && entry.type === 'analysis') {
+        return <DetectionReportViewer report={entry.data} />;
+      }
+      
+      // Стандартное отображение для других типов записей
+      return (
+        <div className="bg-base-200 rounded-xl border border-base-300 overflow-hidden mb-3 p-4">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-xs font-mono text-primary">[{entry.moduleName}]</span>
+            <span className="text-xs text-gray-500">{entry.type}</span>
+            <span className="text-xs text-gray-500">
+              {new Date(entry.timestamp).toLocaleString()}
+            </span>
+            {entry.tags?.map((tag: string) => (
+              <span key={tag} className="text-[9px] bg-base-300 px-1.5 py-0.5 rounded-full">
+                {tag}
+              </span>
+            ))}
+          </div>
+          <pre className="text-xs overflow-auto max-h-96">
+            {JSON.stringify(entry.data, null, 2)}
+          </pre>
+        </div>
+      );
+    } catch (error) {
+      console.error('[Journal] Error rendering entry:', error);
+      return (
+        <div className="bg-base-200 rounded-xl border border-base-300 overflow-hidden mb-3 p-4">
+          <div className="text-center text-red-500">
+            ❌ Ошибка отображения записи
+          </div>
+        </div>
+      );
+    }
+  };
+  
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+   <div className="p-6 max-w-7xl mx-auto">
       <ModuleHeader
         icon="📋"
         title="Журнал телеметрии"
@@ -131,23 +193,24 @@ const Journal: React.FC = () => {
         />
 
 
-        {/* Список записей */}
-        <div className="space-y-2 max-h-[500px] overflow-y-auto mt-4">
-          {displayEntries.length === 0 ? (
-            <div className="text-center text-base-content/40 py-8 text-sm">
-              📭 Нет записей, соответствующих фильтрам
+      
+          {entries.length === 0 ? (
+            <div className="text-center text-base-content/70 py-8 bg-base-200 rounded-xl">
+              <div className="text-4xl mb-2">📭</div>
+              <p>Нет записей в журнале</p>
+              <p className="text-sm">Запустите анализ для появления отчётов</p>
             </div>
           ) : (
-            displayEntries.map((entry) => (
-              <JournalEntry key={entry.id} entry={entry} />
-            ))
+            <div className="space-y-3">
+              {entries.map((entry) => (
+                <div key={entry.id}>
+                  {renderEntry(entry)}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-        <div className="text-center text-xs text-base-content/40 pt-2">
-          Показано {displayEntries.length} из {entries.length} записей
-        </div>
-      </div>
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export interface TelemetryEntry {
-  id: number;
+  id: string;
   timestamp: number;
   type: 'analysis' | 'event' | 'module_start' | 'module_stop';
   moduleId: string;
@@ -13,35 +13,18 @@ export interface TelemetryEntry {
   tags: string[];
 }
 
-export interface TelemetryModule {
-  id: string;
-  name: string;
-  version: string;
-  startedAt: number;
-  stoppedAt?: number;
-  metadata: Record<string, any>;
-}
-
 interface TelemetryState {
+  modules: Record<string, any>;
   entries: TelemetryEntry[];
-  modules: TelemetryModule[];
-  nextId: number;
-  
-  // Управление модулями
-  registerModule: (name: string, metadata?: Record<string, any>) => string;
+  registerModule: (name: string, data?: any) => string;
   unregisterModule: (moduleId: string) => void;
-  getModule: (moduleId: string) => TelemetryModule | undefined;
-  
-  // Добавление записей
-  addEntry: (entry: Omit<TelemetryEntry, 'id' | 'timestamp'>) => void;
-  addEventEntry: (moduleId: string, event: string, details?: any) => void;
-  
-  // Управление
-  clearEntries: () => void;
+  addEntry: (entry: Omit<TelemetryEntry, 'id' | 'timestamp'>) => string;
+  addReportEntry: (entry: Omit<TelemetryEntry, 'id' | 'timestamp'>) => string | null;
+  getEntries: () => TelemetryEntry[];
   getEntriesByModule: (moduleId: string) => TelemetryEntry[];
-  getEntriesByTag: (tag: string) => TelemetryEntry[];  // ✅ исправлено
-  getEntriesByType: (type: TelemetryEntry['type']) => TelemetryEntry[];  // ✅ исправлено
-  
+  getEntriesByType: (type: TelemetryEntry['type']) => TelemetryEntry[];
+  clearEntries: () => void;
+  clearOldEntries: (maxAgeMs: number) => void;
   // Статистика
   getStats: () => {
     total: number;
@@ -53,99 +36,160 @@ interface TelemetryState {
   };
 }
 
+// Хранилище ID уже добавленных отчётов
+const addedReportIds = new Set<string>();
+
 export const useTelemetryStore = create<TelemetryState>()(
   persist(
     (set, get) => ({
+      modules: {},
       entries: [],
-      modules: [],
-      nextId: 1,
       
-      registerModule: (name, metadata = {}) => {
-        const moduleId = `mod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const newModule: TelemetryModule = {
-          id: moduleId,
+      registerModule: (name, data = {}) => {
+        const moduleId = `mod_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const moduleData = {
           name,
-          version: metadata.version || '1.0.0',
-          startedAt: Date.now(),
-          metadata,
+          registeredAt: Date.now(),
+          ...data,
         };
         
         set((state) => ({
-          modules: [...state.modules, newModule],
+          modules: { ...state.modules, [moduleId]: moduleData }
         }));
         
+        // Добавляем событие запуска модуля
         get().addEntry({
           type: 'module_start',
           moduleId,
           moduleName: name,
-          data: { version: metadata.version, mode: metadata.mode },
-          tags: ['system', 'module_start', name],
+          data: moduleData,
+          tags: ['module', 'start', name.toLowerCase()],
         });
         
         return moduleId;
       },
       
       unregisterModule: (moduleId) => {
-        const module = get().modules.find(m => m.id === moduleId);
+        const module = get().modules[moduleId];
         if (module) {
           get().addEntry({
             type: 'module_stop',
             moduleId,
             moduleName: module.name,
-            data: { duration: Date.now() - module.startedAt },
-            tags: ['system', 'module_stop', module.name],
+            data: { stoppedAt: Date.now() },
+            tags: ['module', 'stop', module.name.toLowerCase()],
           });
         }
         
-        set((state) => ({
-          modules: state.modules.filter(m => m.id !== moduleId),
-        }));
-      },
-      
-      getModule: (moduleId) => {
-        return get().modules.find(m => m.id === moduleId);
+        set((state) => {
+          const { [moduleId]: _, ...rest } = state.modules;
+          return { modules: rest };
+        });
       },
       
       addEntry: (entry) => {
         const newEntry: TelemetryEntry = {
-          ...entry,
-          id: get().nextId,
+          id: `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
           timestamp: Date.now(),
+          ...entry,
         };
         
-        set((state) => ({
-          entries: [...state.entries, newEntry],
-          nextId: state.nextId + 1,
-        }));
-        
-        return newEntry;
-      },
-      
-      addEventEntry: (moduleId, event, details = {}) => {
-        const module = get().getModule(moduleId);
-        get().addEntry({
-          type: 'event',
-          moduleId,
-          moduleName: module?.name || moduleId,
-          data: { event, details },
-          tags: ['event', event],
+        set((state) => {
+          const newEntries = [newEntry, ...state.entries];
+          if (newEntries.length > 1000) {
+            newEntries.pop();
+          }
+          return { entries: newEntries };
         });
+        
+        console.log(`[TelemetryStore] ✅ Entry added: ${newEntry.id} (${entry.moduleName} - ${entry.type})`);
+        return newEntry.id;
       },
       
-      clearEntries: () => set({ entries: [], nextId: 1 }),
+      // Специализированный метод для добавления отчётов с защитой от дублирования
+      addReportEntry: (entry) => {
+        // Извлекаем уникальный ID отчёта из данных
+        const reportUniqueId = entry.data?.reportUniqueId || entry.data?.id;
+        
+        if (!reportUniqueId) {
+          console.error('[TelemetryStore] ❌ Report entry missing reportUniqueId!');
+          return null;
+        }
+        
+        // Проверяем, не было ли уже такого отчёта
+        if (addedReportIds.has(reportUniqueId)) {
+          console.warn(`[TelemetryStore] ⚠️ Duplicate report detected! Report with ID ${reportUniqueId} already exists. Skipping...`);
+          console.warn(`[TelemetryStore] Duplicate details:`, {
+            moduleId: entry.moduleId,
+            moduleName: entry.moduleName,
+            type: entry.type,
+            reportUniqueId,
+          });
+          return null;
+        }
+        
+        // Добавляем ID в Set
+        addedReportIds.add(reportUniqueId);
+        
+        // Очищаем старые ID (оставляем последние 1000)
+        if (addedReportIds.size > 1000) {
+          const toDelete = Array.from(addedReportIds).slice(0, addedReportIds.size - 1000);
+          toDelete.forEach(id => addedReportIds.delete(id));
+        }
+        
+        // Создаём запись
+        const newEntry: TelemetryEntry = {
+          id: `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+          timestamp: Date.now(),
+          ...entry,
+        };
+        
+        set((state) => {
+          const newEntries = [newEntry, ...state.entries];
+          if (newEntries.length > 1000) {
+            newEntries.pop();
+          }
+          return { entries: newEntries };
+        });
+        
+        console.log(`[TelemetryStore] ✅ Report entry added: ${newEntry.id} (${entry.moduleName} - report: ${reportUniqueId})`);
+        return newEntry.id;
+      },
+      
+      getEntries: () => {
+        const entries = get().entries;
+        return [...entries].sort((a, b) => b.timestamp - a.timestamp);
+      },
       
       getEntriesByModule: (moduleId) => {
-        return get().entries.filter(e => e.moduleId === moduleId);
-      },
-      
-      getEntriesByTag: (tag) => {
-        return get().entries.filter(e => e.tags.includes(tag));
+        const entries = get().entries;
+        return entries
+          .filter(entry => entry.moduleId === moduleId)
+          .sort((a, b) => b.timestamp - a.timestamp);
       },
       
       getEntriesByType: (type) => {
-        return get().entries.filter(e => e.type === type);
+        const entries = get().entries;
+        return entries
+          .filter(entry => entry.type === type)
+          .sort((a, b) => b.timestamp - a.timestamp);
       },
       
+      clearEntries: () => {
+        set({ entries: [] });
+        addedReportIds.clear();
+        console.log('[TelemetryStore] All entries cleared');
+      },
+      
+      clearOldEntries: (maxAgeMs) => {
+        const cutoffTime = Date.now() - maxAgeMs;
+        set((state) => {
+          const newEntries = state.entries.filter(entry => entry.timestamp > cutoffTime);
+          console.log(`[TelemetryStore] Cleared ${state.entries.length - newEntries.length} old entries`);
+          return { entries: newEntries };
+        });
+      },
+
       getStats: () => {
         const entries = get().entries;
         const analysisEntries = entries.filter(e => e.type === 'analysis');
@@ -159,13 +203,16 @@ export const useTelemetryStore = create<TelemetryState>()(
           system: entries.filter(e => e.type === 'module_start' || e.type === 'module_stop').length,
         };
       },
+
+      
+
+      
     }),
     {
       name: 'telemetry-storage',
       partialize: (state) => ({
-        entries: state.entries,
         modules: state.modules,
-        nextId: state.nextId,
+        entries: state.entries,
       }),
     }
   )

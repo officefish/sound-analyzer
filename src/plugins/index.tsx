@@ -7,6 +7,8 @@ import { setPluginRegistry } from '../store/plugins.store';
 
 import { TuneMonitorPlugin } from '../modules/Microphone/plugins/TuneMonitorPlugin'; // ✅ Добавляем
 import { DetectorFFTPlugin } from '../modules/Microphone/plugins/fft/DetectorFFTPlugin';
+import { TrendsFFTDetectorPlugin } from '../modules/Microphone/plugins/trendsFFT/TrendsFFTDetectorPlugin';
+
 import { IPlugin } from '../types/plugins';
 
 // Список всех оригинальных плагинов
@@ -16,6 +18,7 @@ export const ALL_PLUGINS: IPlugin[] = [
   RecorderPlugin,
   DetectorFFTPlugin,
   TuneMonitorPlugin, 
+  TrendsFFTDetectorPlugin
 ];
 
 // Сохраняем оригинальные плагины в глобальный реестр
@@ -37,4 +40,5 @@ export {
   DetectorFFTPlugin,
   RecorderPlugin,
   TuneMonitorPlugin,
+  TrendsFFTDetectorPlugin
 };

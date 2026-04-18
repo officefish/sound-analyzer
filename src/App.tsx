@@ -4,10 +4,8 @@ import { MODULES, ModuleType } from './types/modules';
 import Sidebar from './components/Navigation/Sidebar';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
-//import Library from './modules/Library';
 
 // Ленивая загрузка модулей
-//const Stopwatch = lazy(() => import('./modules/Stopwatch'));
 const Journal = lazy(() => import('./modules/Journal'));
 const Microphone = lazy(() => import('./modules/Microphone'));
 const Library = lazy(() => import('./modules/Library'));
@@ -20,9 +18,9 @@ const moduleComponents: Record<ModuleType, React.ComponentType> = {
 };
 
 // Обновляем MODULES с реальными компонентами
-//MODULES[0].component = Stopwatch;
 MODULES[0].component = Microphone;
 MODULES[1].component = Library;
+MODULES[2].component = Journal;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();

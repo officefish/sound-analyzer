@@ -2,6 +2,7 @@ import React from 'react';
 import { TelemetryEntry } from '../../../store/telemetry.store';
 import DetectionReportViewer from './DetectionReportViewer';
 import ErrorBoundary from '../../../components/ui/ErrorBoundary';
+import FFTTrendsReportViewer from './FFTTrendsReportViewer';
 
 interface JournalEntryProps {
   entry: TelemetryEntry;
@@ -10,6 +11,8 @@ interface JournalEntryProps {
 // Регистр типов анализов и соответствующих вьюверов
 const analysisViewers: Record<string, React.ComponentType<{ report: any }>> = {
   'FFTDetector': DetectionReportViewer,
+  'TrendsFFTDetector': FFTTrendsReportViewer,
+  // Иные отчеты
 };
 
 const JournalEntry: React.FC<JournalEntryProps> = ({ entry }) => {
