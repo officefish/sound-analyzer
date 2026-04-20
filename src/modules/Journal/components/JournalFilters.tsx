@@ -54,7 +54,7 @@ const JournalFilters: React.FC<JournalFiltersProps> = ({
           <select
             value={filters.moduleName || ''}
             onChange={(e) => onFilterChange({ moduleName: e.target.value || undefined })}
-            className="select select-bordered select-xs bg-base-300/50 border-base-300 text-sm min-w-[120px] focus:outline-none focus:border-primary/50"
+            className="select select-bordered select-xs bg-base-300/50 border-base-300 text-sm text-primary min-w-[120px] focus:outline-none focus:border-primary/50"
           >
             <option value="">Все модули</option>
             {availableModules.map((module) => (

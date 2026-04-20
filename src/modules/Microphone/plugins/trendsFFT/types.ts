@@ -4,7 +4,11 @@ export interface TrendsSample {
   rms: number;
   timestamp: number;
   isValid: boolean;
+  state?: string | null;           // ✅ Добавляем - состояние для каждого сэмпла
+  stateConfidence?: number;        // ✅ Добавляем - уверенность для каждого сэмпла
 }
+
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'veryLow';
 
 export interface TrendsDetectionResult {
   isDetected: boolean;
@@ -13,6 +17,7 @@ export interface TrendsDetectionResult {
   stateIcon: string;
   stateColor: string;
   confidence: number;
+  confidenceLevel?: ConfidenceLevel; // Явно перечисляем все возможные значения
   samples: TrendsSample[];
   analysis: any;
   timestamp: number;

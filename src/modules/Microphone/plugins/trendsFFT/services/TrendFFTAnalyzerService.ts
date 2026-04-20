@@ -68,7 +68,7 @@ class TemporalPatternAnalyzer {
       avgBurstDuration: this.calculateAvgBurstDuration(segments, segmentDuration),
       
       // Частотные скачки
-      frequencyJumps: this.detectFrequencyJumps(segments, samples.length * 0.03), // примерная длительность
+      frequencyJumps: this.detectFrequencyJumps(segments, samples.length * 0.03),
       
       // Тренды
       volumeTrend: this.analyzeTrend(segments.map(s => s.rms)),
@@ -90,7 +90,7 @@ class TemporalPatternAnalyzer {
     const jumps: number[] = [];
     for (let i = 1; i < segments.length; i++) {
       const jump = Math.abs(segments[i].centroid - segments[i-1].centroid);
-      if (jump > 50) { // Минимальный порог скачка
+      if (jump > 50) {
         jumps.push(jump);
       }
     }
@@ -124,7 +124,6 @@ class TemporalPatternAnalyzer {
     if (ratio > 1.5) return 'increasing';
     if (ratio < 0.67) return 'decreasing';
     
-    // Проверка на колебания
     const variance = this.calculateVariance(values);
     if (variance > 0.1 * firstAvg) return 'oscillating';
     
@@ -145,17 +144,13 @@ class TemporalPatternAnalyzer {
   }
   
   detectPeriodicity(values: number[]): string {
-    // Автокорреляционный анализ
     const autocorr = this.autocorrelate(values);
-    
-    // Ищем пики в автокорреляции
     const peaks = this.findPeaks(autocorr);
     const significantPeaks = peaks.filter(p => p.value > 0.3);
     
     if (significantPeaks.length === 0) return 'none';
     if (significantPeaks.length < 3) return 'irregular';
     
-    // Проверяем регулярность пиков
     const intervals = [];
     for (let i = 1; i < significantPeaks.length; i++) {
       intervals.push(significantPeaks[i].index - significantPeaks[i-1].index);
@@ -170,16 +165,13 @@ class TemporalPatternAnalyzer {
   }
   
   analyzeEnvelopeShape(rmsValues: number[]): string {
-    // Находим максимальный пик
     const maxIndex = rmsValues.indexOf(Math.max(...rmsValues));
     const maxValue = rmsValues[maxIndex];
     
-    // Анализ атаки (до пика)
     const attack = maxIndex > 0 ? rmsValues.slice(0, maxIndex) : [];
     const attackSlope = attack.length > 1 ? 
       (maxValue - attack[0]) / attack.length : 0;
     
-    // Анализ спада (после пика)
     const decay = maxIndex < rmsValues.length - 1 ? 
       rmsValues.slice(maxIndex) : [];
     const decaySlope = decay.length > 1 ?
@@ -240,7 +232,6 @@ class TemporalPatternAnalyzer {
     return burstCount > 0 ? burstDuration / burstCount : 0;
   }
   
-  // Вспомогательные методы
   calculateStdDev(values: number[]): number {
     const mean = this.average(values);
     const variance = this.calculateVariance(values);
@@ -284,7 +275,7 @@ class TemporalPatternAnalyzer {
   }
 }
 
-class TrendsDetectorServiceImpl extends SimpleEventEmitter {
+export class TrendsDetectorServiceImpl extends SimpleEventEmitter {
   private config: TrendsDetectorConfig = {
     intervalMs: 30,
     measurementsCount: 100,
@@ -294,8 +285,10 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
   private isCollecting: boolean = false;
   private collectionTimeout: number | null = null;
   private currentSampleIndex: number = 0;
-  private patternAnalyzer: TemporalPatternAnalyzer;
+  private currentWindowStates: Map<number, string> = new Map(); // ✅ Храним состояния для каждого окна
   
+  patternAnalyzer: TemporalPatternAnalyzer;
+
   constructor() {
     super();
     this.patternAnalyzer = new TemporalPatternAnalyzer(44100);
@@ -318,9 +311,16 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       rms,
       timestamp: Date.now(),
       isValid: this.validateSample(centroid, flux, rms),
+      state: null, // ✅ Добавляем поле для состояния
+      stateConfidence: 0, // ✅ Добавляем поле для уверенности
     };
     
     this.samplesBuffer.push(sample);
+    
+    // ✅ Если идет сбор данных, анализируем каждое окно
+    if (this.isCollecting && this.currentSampleIndex > 0) {
+      this.analyzeCurrentWindow();
+    }
     
     while (this.samplesBuffer.length > this.config.measurementsCount * 2) {
       this.samplesBuffer.shift();
@@ -339,6 +339,135 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
     }
   }
   
+  // ✅ Новый метод: анализ текущего окна для определения состояния каждого сэмпла
+  private analyzeCurrentWindow(): void {
+    const windowSize = Math.max(5, Math.floor(this.config.measurementsCount / 20)); // 20 окон
+    const currentWindowStart = Math.max(0, this.currentSampleIndex - windowSize);
+    const windowSamples = this.samplesBuffer.slice(currentWindowStart, this.currentSampleIndex);
+    
+    if (windowSamples.length >= windowSize / 2) {
+      const windowResult = this.analyzeTrendsForWindow(windowSamples);
+      
+      // Сохраняем состояние для каждого сэмпла в окне
+      for (let i = 0; i < windowSamples.length; i++) {
+        const sampleIndex = currentWindowStart + i;
+        if (this.samplesBuffer[sampleIndex]) {
+          this.samplesBuffer[sampleIndex].state = windowResult.state;
+          this.samplesBuffer[sampleIndex].stateConfidence = windowResult.confidence;
+          this.currentWindowStates.set(sampleIndex, windowResult.state);
+        }
+      }
+      
+      this.emit('onWindowAnalyzed', {
+        windowIndex: Math.floor(currentWindowStart / windowSize),
+        state: windowResult.state,
+        stateName: windowResult.stateName,
+        confidence: windowResult.confidence,
+      });
+    }
+  }
+  
+  // ✅ Анализ окна сэмплов (быстрый, для промежуточных результатов)
+  private analyzeTrendsForWindow(samples: TrendsSample[]): TrendsDetectionResult {
+    if (samples.length === 0) {
+      return {
+        isDetected: true,
+        state: 'UNKNOWN',
+        stateName: 'Неизвестно',
+        stateIcon: '❓',
+        stateColor: '#999',
+        confidence: 0,
+        samples: samples,
+        analysis: null,
+        timestamp: Date.now(),
+      };
+    }
+    
+    const actualPatterns = this.patternAnalyzer.analyzeTemporalPatterns(samples);
+    
+    const centroidValues = samples.map(s => s.centroid);
+    const fluxValues = samples.map(s => s.flux);
+    const rmsValues = samples.map(s => s.rms);
+    
+    const spectralAnalysis = {
+      centroidMean: this.calculateMean(centroidValues),
+      fluxMean: this.calculateMean(fluxValues),
+      rmsMean: this.calculateMean(rmsValues),
+    };
+    
+    const scores: { state: string; score: number; details: any }[] = [];
+    
+    for (const [stateKey, state] of Object.entries(SOUND_STATES)) {
+      let spectralScore = 0;
+      let spectralWeight = 0;
+      
+      if (state.thresholds.centroid) {
+        const centroidScore = this.calculateMembership(
+          spectralAnalysis.centroidMean,
+          state.thresholds.centroid.min,
+          state.thresholds.centroid.max
+        );
+        spectralScore += centroidScore * 0.35;
+        spectralWeight += 0.35;
+      }
+      
+      if (state.thresholds.flux) {
+        const fluxScore = this.calculateMembership(
+          spectralAnalysis.fluxMean,
+          state.thresholds.flux.min,
+          state.thresholds.flux.max
+        );
+        spectralScore += fluxScore * 0.25;
+        spectralWeight += 0.25;
+      }
+      
+      if (state.thresholds.rms) {
+        const rmsScore = this.calculateMembership(
+          spectralAnalysis.rmsMean,
+          state.thresholds.rms.min,
+          state.thresholds.rms.max
+        );
+        spectralScore += rmsScore * 0.2;
+        spectralWeight += 0.2;
+      }
+      
+      spectralScore = spectralWeight > 0 ? spectralScore / spectralWeight : 0;
+      
+      const temporalScore = this.calculateTemporalScore(actualPatterns, state.temporalPatterns);
+      const totalScore = (spectralScore * 0.4 + temporalScore * 0.6) * 100;
+      
+      scores.push({
+        state: stateKey,
+        score: totalScore,
+        details: {
+          spectralScore: spectralScore * 100,
+          temporalScore: temporalScore * 100,
+        },
+      });
+    }
+    
+    scores.sort((a, b) => b.score - a.score);
+    const bestMatch = scores[0];
+    const state = getSoundStateByKey(bestMatch.state);
+    
+    return {
+      isDetected: true,
+      state: bestMatch.state,
+      stateName: state?.name || 'Неизвестно',
+      stateIcon: state?.icon || '❓',
+      stateColor: state?.color || '#999',
+      confidence: bestMatch.score,
+      samples: samples,
+      analysis: {
+        scores,
+        patterns: actualPatterns,
+        spectral: spectralAnalysis,
+        bestMatchDetails: bestMatch.details,
+      },
+      timestamp: Date.now(),
+    };
+  }
+  
   private validateSample(centroid: number, flux: number, rms: number): boolean {
     return !isNaN(centroid) && !isNaN(flux) && !isNaN(rms) && 
            centroid >= 0 && flux >= 0 && rms >= 0;
@@ -349,6 +478,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
     
     this.isCollecting = true;
     this.currentSampleIndex = 0;
+    this.currentWindowStates.clear();
     this.emit('onCollectionStarted', {});
     
     const maxDuration = this.config.intervalMs * this.config.measurementsCount * 2;
@@ -375,6 +505,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
     this.stopCollection();
     this.samplesBuffer = [];
     this.currentSampleIndex = 0;
+    this.currentWindowStates.clear();
   }
   
   private finalizeCollection(): void {
@@ -391,8 +522,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
   
   private analyzeTrends(samples: TrendsSample[]): TrendsDetectionResult {
     console.log('[TrendsDetector] analyzeTrends called with samples:', samples.length);
-    console.log('[TrendsDetector] First sample:', samples[0]);
-    console.log('[TrendsDetector] Last sample:', samples[samples.length - 1]);
     
     if (samples.length === 0) {
       console.warn('[TrendsDetector] No samples to analyze!');
@@ -409,10 +538,8 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       };
     }
     
-    // Получаем временные паттерны из сэмплов
     const actualPatterns = this.patternAnalyzer.analyzeTemporalPatterns(samples);
     
-    // Рассчитываем спектральные характеристики
     const centroidValues = samples.map(s => s.centroid);
     const fluxValues = samples.map(s => s.flux);
     const rmsValues = samples.map(s => s.rms);
@@ -423,15 +550,12 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       rmsMean: this.calculateMean(rmsValues),
     };
     
-    // Оценка соответствия каждому состоянию
     const scores: { state: string; score: number; details: any }[] = [];
     
     for (const [stateKey, state] of Object.entries(SOUND_STATES)) {
-      // Оценка спектральных характеристик
       let spectralScore = 0;
       let spectralWeight = 0;
       
-      // Центр масс
       if (state.thresholds.centroid) {
         const centroidScore = this.calculateMembership(
           spectralAnalysis.centroidMean,
@@ -442,7 +566,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
         spectralWeight += 0.35;
       }
       
-      // Спектральный поток
       if (state.thresholds.flux) {
         const fluxScore = this.calculateMembership(
           spectralAnalysis.fluxMean,
@@ -453,7 +576,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
         spectralWeight += 0.25;
       }
       
-      // Громкость
       if (state.thresholds.rms) {
         const rmsScore = this.calculateMembership(
           spectralAnalysis.rmsMean,
@@ -466,10 +588,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       
       spectralScore = spectralWeight > 0 ? spectralScore / spectralWeight : 0;
       
-      // Оценка временных паттернов
       const temporalScore = this.calculateTemporalScore(actualPatterns, state.temporalPatterns);
-      
-      // Итоговая оценка (40% спектр, 60% временные паттерны)
       const totalScore = (spectralScore * 0.4 + temporalScore * 0.6) * 100;
       
       scores.push({
@@ -483,12 +602,20 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       });
     }
     
-    // Сортируем по убыванию
     scores.sort((a, b) => b.score - a.score);
     const bestMatch = scores[0];
     const state = getSoundStateByKey(bestMatch.state);
-
-     
+    
+    // ✅ Добавляем состояния для каждого сэмпла из сохраненных окон
+    const enrichedSamples = samples.map((sample, index) => {
+      const globalIndex = this.samplesBuffer.length - samples.length + index;
+      const windowState = this.currentWindowStates.get(globalIndex);
+      if (windowState && !sample.state) {
+        sample.state = windowState;
+      }
+      return sample;
+    });
+    
     const result = {
       isDetected: true,
       state: bestMatch.state,
@@ -496,7 +623,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       stateIcon: state?.icon || '❓',
       stateColor: state?.color || '#999',
       confidence: bestMatch.score,
-      samples: samples,
+      samples: enrichedSamples,
       analysis: {
         scores,
         patterns: actualPatterns,
@@ -511,17 +638,16 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       stateName: state?.name,
       confidence: bestMatch.score,
       hasAnalysis: !!result.analysis,
+      samplesWithState: enrichedSamples.filter(s => s.state).length,
     });
     
     return result;
   }
   
-  
-  private calculateTemporalScore(actualPatterns: any, expectedPatterns: any): number {
+  calculateTemporalScore(actualPatterns: any, expectedPatterns: any): number {
     let score = 0;
     let totalWeight = 0;
     
-    // Статистики
     const stats = ['centroidStd', 'fluxStd', 'rmsStd'];
     for (const stat of stats) {
       if (expectedPatterns[stat] && actualPatterns[stat] !== undefined) {
@@ -535,7 +661,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       }
     }
     
-    // Активность
     if (expectedPatterns.activityRatio && actualPatterns.activityRatio !== undefined) {
       const activityScore = this.calculateMembership(
         actualPatterns.activityRatio,
@@ -546,7 +671,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       totalWeight += 0.15;
     }
     
-    // Паузы
     if (expectedPatterns.avgSilenceDuration && actualPatterns.avgSilenceDuration !== undefined) {
       const silenceScore = this.calculateMembership(
         actualPatterns.avgSilenceDuration,
@@ -557,7 +681,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       totalWeight += 0.1;
     }
     
-    // Длительность всплесков
     if (expectedPatterns.avgBurstDuration && actualPatterns.avgBurstDuration !== undefined) {
       const burstScore = this.calculateMembership(
         actualPatterns.avgBurstDuration,
@@ -568,7 +691,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       totalWeight += 0.1;
     }
     
-    // Частотные скачки
     if (expectedPatterns.frequencyJumps && expectedPatterns.frequencyJumps.enabled && actualPatterns.frequencyJumps) {
       const jumps = actualPatterns.frequencyJumps;
       const expectedJumps = expectedPatterns.frequencyJumps;
@@ -578,14 +700,12 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
         score += densityScore * 0.15;
         totalWeight += 0.15;
       } else if (expectedJumps.enabled === false) {
-        // Если скачки не ожидаются, штрафуем за их наличие
         const noJumpsScore = jumps.actualJumps === 0 ? 1 : Math.max(0, 1 - jumps.actualJumps / 10);
         score += noJumpsScore * 0.15;
         totalWeight += 0.15;
       }
     }
     
-    // Тренды
     if (expectedPatterns.volumeTrend && actualPatterns.volumeTrend) {
       const trendMatch = expectedPatterns.volumeTrend.includes(actualPatterns.volumeTrend);
       score += (trendMatch ? 1 : 0.3) * 0.1;
@@ -598,7 +718,6 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       totalWeight += 0.1;
     }
     
-    // Стабильность
     if (expectedPatterns.longTermStability && actualPatterns.longTermStability) {
       const stabilityLevels = ['veryLow', 'low', 'medium', 'high', 'veryHigh'];
       const expectedIndex = stabilityLevels.indexOf(expectedPatterns.longTermStability[0]);
@@ -608,14 +727,12 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
       totalWeight += 0.1;
     }
     
-    // Периодичность
     if (expectedPatterns.periodicity && actualPatterns.periodicity) {
       const periodicityMatch = expectedPatterns.periodicity.includes(actualPatterns.periodicity);
       score += (periodicityMatch ? 1 : 0.4) * 0.1;
       totalWeight += 0.1;
     }
     
-    // Форма огибающей
     if (expectedPatterns.envelopeShape && actualPatterns.envelopeShape) {
       const envelopeMatch = expectedPatterns.envelopeShape.includes(actualPatterns.envelopeShape);
       score += (envelopeMatch ? 1 : 0.3) * 0.05;
@@ -625,7 +742,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
     return totalWeight > 0 ? score / totalWeight : 0;
   }
   
-  private calculateMembership(value: number, min: number, max: number): number {
+  protected calculateMembership(value: number, min: number, max: number): number {
     if (value >= min && value <= max) return 1;
     if (value < min) {
       const diff = min - value;
@@ -637,7 +754,7 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
     return Math.max(0, 1 - diff / maxDiff);
   }
   
-  private calculateMean(values: number[]): number {
+  protected calculateMean(values: number[]): number {
     return values.reduce((a, b) => a + b, 0) / values.length;
   }
   
@@ -657,3 +774,4 @@ class TrendsDetectorServiceImpl extends SimpleEventEmitter {
 }
 
 export const trendsDetector = new TrendsDetectorServiceImpl();
+

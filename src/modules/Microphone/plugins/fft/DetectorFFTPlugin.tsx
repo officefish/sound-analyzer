@@ -83,7 +83,7 @@ class DetectorFFTPluginClass implements IPlugin {
     if (context) {
         (this as any).context = context;
     }
-    }
+  }
   
   onDeactivate(): void {
     console.log('📊 FFT Detector Plugin deactivated');

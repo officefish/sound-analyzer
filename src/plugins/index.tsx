@@ -1,15 +1,13 @@
-//import { LapHistoryPlugin } from '../modules/Stopwatch/plugins/LapHistoryPlugin';
-//import { SoundEffectPlugin } from '../modules/Stopwatch/plugins/SoundEffectPlugin';
-//import { NoiseGatePlugin } from '../modules/Microphone/plugins/NoiseGatePlugin';
+
 import { RecorderPlugin } from '../modules/Microphone/plugins/recorder/RecorderPlugin';
 import { setPluginRegistry } from '../store/plugins.store';
-// src/plugins/index.ts
-
 import { TuneMonitorPlugin } from '../modules/Microphone/plugins/TuneMonitorPlugin'; // ✅ Добавляем
 import { DetectorFFTPlugin } from '../modules/Microphone/plugins/fft/DetectorFFTPlugin';
 import { TrendsFFTDetectorPlugin } from '../modules/Microphone/plugins/trendsFFT/TrendsFFTDetectorPlugin';
 
 import { IPlugin } from '../types/plugins';
+
+import { SoundQualityAnalyzerPlugin } from '../modules/Microphone/plugins/quality/SoundQualityAnalyzerPlugin';
 
 // Список всех оригинальных плагинов
 export const ALL_PLUGINS: IPlugin[] = [
@@ -18,7 +16,8 @@ export const ALL_PLUGINS: IPlugin[] = [
   RecorderPlugin,
   DetectorFFTPlugin,
   TuneMonitorPlugin, 
-  TrendsFFTDetectorPlugin
+  TrendsFFTDetectorPlugin,
+  SoundQualityAnalyzerPlugin
 ];
 
 // Сохраняем оригинальные плагины в глобальный реестр

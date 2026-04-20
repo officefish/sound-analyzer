@@ -182,11 +182,11 @@ const DetectionReportViewer: React.FC<DetectionReportViewerProps> = ({ report })
             <div className="text-xl font-bold text-primary">{samplesCount}</div>
           </div>
           <div>
-            <div className="text-xs text-base-content/50">Успешных</div>
+            <div className="text-xs text-base-content/50">Детекций</div>
             <div className="text-xl font-bold text-success">{validSamples}</div>
           </div>
           <div>
-            <div className="text-xs text-base-content/50">Успешность</div>
+            <div className="text-xs text-base-content/50">Вероятность угрозы</div>
             <div className="text-xl font-bold text-info">{successRate}%</div>
           </div>
           <div>

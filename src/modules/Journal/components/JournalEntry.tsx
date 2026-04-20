@@ -137,6 +137,9 @@ const JournalEntry: React.FC<JournalEntryProps> = ({ entry }) => {
   };
 
   const renderContent = () => {
+
+    console.log('entry.type: ' + entry.type)
+
     switch (entry.type) {
       
       case 'event':
@@ -192,7 +195,7 @@ const JournalEntry: React.FC<JournalEntryProps> = ({ entry }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-lg">{getIcon()}</span>
-            <span className="text-xs text-gray-500 font-mono">#{entry.id}</span>
+            {/* <span className="text-xs text-gray-500 font-mono">#{entry.id}</span> */}
             <span className="text-xs text-gray-500">[{entry.moduleName || 'system'}]</span>
             {/* Теги из записи или из отчёта */}
             {entry.type === 'analysis' && entry.data?.tags ? (

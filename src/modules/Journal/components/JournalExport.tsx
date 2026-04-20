@@ -44,10 +44,10 @@ const JournalExport: React.FC<JournalExportProps> = ({ entries }) => {
 
   return (
     <div className="dropdown dropdown-end">
-      <label tabIndex={0} className="btn btn-ghost btn-sm gap-1">
-        <span>📥</span>
-        <span>Экспорт</span>
+      <label tabIndex={0} className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 cursor-pointer">
+        <span>📥</span><span>Экспорт</span>
       </label>
+
       <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-xl z-10 w-40 shadow-lg border border-base-300">
         <li><button onClick={exportToJSON} className="text-sm">📋 JSON</button></li>
         <li><button onClick={exportToCSV} className="text-sm">📊 CSV</button></li>

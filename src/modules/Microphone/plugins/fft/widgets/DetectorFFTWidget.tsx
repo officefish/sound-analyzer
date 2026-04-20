@@ -71,33 +71,33 @@ const DetectorFFTWidget: React.FC<DetectorFFTWidgetProps> = ({
     const updateStatus = () => {
         const status = onAction('getStatus');
         if (status) {
-        setIsAnalyzing(status.isAnalyzing || false);
-        setIsCollecting(status.isCollecting || false);
-        setSamplesCollected(status.samplesCollected || 0);
-        setNeededSamples(status.neededSamples || 3);
-        setDetectionCount(status.detectionCount || 0);
-        setTotalAnalyses(status.totalAnalyses || 0);
-        setSuccessfulDetections(status.successfulDetections || 0);
-        setCurrentAnalysisProgress(status.currentAnalysisProgress || 0);
-        
-        // ✅ Приоритет: сначала смотрим на lastResult, потом на tickStates
-        if (lastResult && lastResult.samples && lastResult.samples.length > 0) {
-            // Используем lastResult для определения состояний тактов
-            const newStates: TickState[] = lastResult.samples.map((sample: any) => {
-            if (sample.isValid && lastResult.isDrone) return 'drone';
-            if (sample.isValid) return 'passed';
-            return 'pending';
-            });
-            setTickStates(newStates);
-            setCurrentTickIndex(lastResult.samples.length);
-        } else if (status.tickStates) {
-            setTickStates(status.tickStates);
-            setCurrentTickIndex(status.currentTickIndex || 0);
-        }
-        
-        if (status.currentSample) {
-            setCurrentSample(status.currentSample);
-        }
+          setIsAnalyzing(status.isAnalyzing || false);
+          setIsCollecting(status.isCollecting || false);
+          setSamplesCollected(status.samplesCollected || 0);
+          setNeededSamples(status.neededSamples || 3);
+          setDetectionCount(status.detectionCount || 0);
+          setTotalAnalyses(status.totalAnalyses || 0);
+          setSuccessfulDetections(status.successfulDetections || 0);
+          setCurrentAnalysisProgress(status.currentAnalysisProgress || 0);
+          
+          // ✅ Приоритет: сначала смотрим на lastResult, потом на tickStates
+          if (lastResult && lastResult.samples && lastResult.samples.length > 0) {
+              // Используем lastResult для определения состояний тактов
+              const newStates: TickState[] = lastResult.samples.map((sample: any) => {
+              if (sample.isValid && lastResult.isDrone) return 'drone';
+              if (sample.isValid) return 'passed';
+              return 'pending';
+              });
+              setTickStates(newStates);
+              setCurrentTickIndex(lastResult.samples.length);
+          } else if (status.tickStates) {
+              setTickStates(status.tickStates);
+              setCurrentTickIndex(status.currentTickIndex || 0);
+          }
+          
+          if (status.currentSample) {
+              setCurrentSample(status.currentSample);
+          }
         }
         
         const currentConfig = onAction('getConfig');
