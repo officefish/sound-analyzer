@@ -56,6 +56,10 @@ class SoundQualityAnalyzerPluginClass implements IPlugin {
   };
   
   onActivate(context?: any): void {
+
+    if (context) {
+      // proccessing context here
+    }
     console.log(`[${this.name}] Активация плагина v${this.version}`);
     
     // Загружаем сохраненные настройки
@@ -72,12 +76,19 @@ class SoundQualityAnalyzerPluginClass implements IPlugin {
   }
   
   onDeactivate(context?: any): void {
+      if (context) {
+      // proccessing context here
+    }
     console.log(`[${this.name}] Деактивация плагина`);
     soundQualityService.reset();
     this.resetMetrics();
   }
   
   onModuleEvent(event: string, data: any, context?: any): void {
+      if (context) {
+      // proccessing context here
+    }
+    
     // Обработка событий от модуля
     switch (event) {
       case 'recordingStarted':
@@ -203,6 +214,11 @@ class SoundQualityAnalyzerPluginClass implements IPlugin {
   // ============ Метод execute для внешнего взаимодействия ============
   
   execute(action: string, data?: any, context?: any): any {
+
+    if (context) {
+      // proccessing context here
+    }
+
     console.log(`[${this.name}] Execute: ${action}`, data);
     
     switch (action) {

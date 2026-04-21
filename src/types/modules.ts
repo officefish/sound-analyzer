@@ -1,6 +1,6 @@
 import { IPluginContext } from './plugins';
 
-export type ModuleType = 'microphone' | 'library'  | 'journal' // | 'proccessing';
+export type ModuleType = 'microphone' | 'library'  | 'journal'  // | 'proccessing';
 
 export interface IModule {
   id: ModuleType;

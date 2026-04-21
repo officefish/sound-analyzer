@@ -258,7 +258,7 @@ class DetectorFFTPluginClass implements IPlugin {
   }
   
   private handleDroneDetected(result: DetectionResult): void {
-    console.log(`🚁 DRONE DETECTED! (${this.detectionCount})`);
+    console.log(`🚁 DRONE DETECTED! (${result})`);
     
     // В авторежиме после обнаружения автоматически запускаем новый сбор
     if (this.detectionMode === 'auto' && this.isAnalyzing) {

@@ -6,8 +6,8 @@ const Header: React.FC = () => {
   
   const getAppTitle = () => {
     switch (currentApp) {
-      case 'stopwatch':
-        return '⏱ Секундомер';
+      // case 'stopwatch':
+      //   return '⏱ Секундомер';
       case 'microphone':
         return '🎤 Микрофон';
       default:

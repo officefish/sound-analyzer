@@ -84,7 +84,7 @@ class TrendsDetectionReportService {
     
     // Извлекаем данные о трендах из анализа
     const patterns = result.analysis?.patterns || {};
-    const spectral = result.analysis?.spectral || {};
+    //const spectral = result.analysis?.spectral || {};
     
     // Получаем все значения для вычисления min/max
     const centroidValues = result.samples.map(s => s.centroid);

@@ -67,10 +67,10 @@ const Sidebar: React.FC = () => {
           <div className="flex justify-between">
             <span>📊 Статистика:</span>
           </div>
-          <div className="flex justify-between text-gray-400">
+          {/* <div className="flex justify-between text-gray-400">
             <span>⏱ Секундомер:</span>
             <span>{navigationCount.stopwatch} раз</span>
-          </div>
+          </div> */}
           <div className="flex justify-between text-gray-400">
             <span>🎤 Микрофон:</span>
             <span>{navigationCount.microphone} раз</span>

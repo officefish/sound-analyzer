@@ -7,7 +7,7 @@ import { audioAnalysis } from '../../../../services/AudioFFTAnalysisService';
 import { trendsDetector } from './services/ImprovedFFTTrendsService';
 import { trendsDetectionReport } from '../../../../services/TrendsDetectionReport';
 import { useTelemetryStore } from '../../../../store/telemetry.store';
-import { TrendsDetectionResult } from './types';
+import { SOUND_STATES, TrendsDetectionResult } from './types';
 
 type DetectionMode = 'manual' | 'auto';
 export type TickState = 'pending' | 'passed' | 'BIRDS' | 'PEOPLE' | 'WIND' | 'DRONE' | 'EXPLOSION' | 'TRAFFIC' | 'QUIET';
@@ -35,7 +35,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
   private lastDetectionResult: TrendsDetectionResult | null = null;
   private detectionHistory: TrendsDetectionResult[] = [];
   private currentTickStates: TickState[] = [];
-  private currentTickIndex: number = 0;
+  //private currentTickIndex: number = 0;
   
   settings = {
     detectionMode: 'auto' as DetectionMode,
@@ -222,7 +222,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     if (data.samplesCount === 1) {
       this.lastDetectionResult = null;
       this.currentTickStates = [];
-      this.currentTickIndex = 0;
+      //this.currentTickIndex = 0;
     }
   }
   
@@ -235,7 +235,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
         this.currentTickStates.push('pending');
       }
     }
-    this.currentTickIndex = samplesCollected;
+    //this.currentTickIndex = samplesCollected;
   }
   
   private async handleDetectionResult(result: TrendsDetectionResult): Promise<void> {
@@ -303,7 +303,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
         this.currentTickStates.push('pending');
       }
     }
-    this.currentTickIndex = neededSamples;
+    //this.currentTickIndex = neededSamples;
   }
   
   private handleStateDetected(result: TrendsDetectionResult): void {
@@ -435,7 +435,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     trendsDetector.stopCollection();
     // Сбрасываем состояния тактов при остановке
     this.currentTickStates = [];
-    this.currentTickIndex = 0;
+    //this.currentTickIndex = 0;
     this.currentAnalysisProgress = 0;
   }
   
@@ -453,7 +453,22 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     
     // Сбрасываем состояния при смене режима
     this.currentTickStates = [];
-    this.currentTickIndex = 0;
+    //this.currentTickIndex = 0;
+  }
+
+  protected customPatterns: Record<string, any> = {};
+
+  // Метод для установки пользовательских паттернов
+  setCustomPatterns(patterns: Record<string, any>): void {
+    this.customPatterns = patterns;
+  
+    // Объединяем стандартные и пользовательские паттерны
+    const allPatterns = { ...SOUND_STATES, ...patterns };
+  
+    // Обновляем детектор (нужно добавить метод в TrendsDetectorServiceImpl)
+    trendsDetector.setPatterns(allPatterns);
+  
+    this.saveConfig();
   }
   
   execute(action: string, data?: any): any {

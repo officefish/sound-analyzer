@@ -17,7 +17,7 @@ interface SoundQualityWidgetProps {
 const SoundQualityWidget: React.FC<SoundQualityWidgetProps> = ({ 
   plugin, 
   context, 
-  onAction, 
+  //onAction, 
   isActive 
 }) => {
   const [quality, setQuality] = useState<number>(0);
