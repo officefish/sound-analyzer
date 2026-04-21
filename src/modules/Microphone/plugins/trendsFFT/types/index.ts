@@ -66,54 +66,33 @@ export const SOUND_STATES: Record<string, {
     rms: { min: number; max: number };
   };
 }> = {
-  BIRDS: {
-    key: 'BIRDS',
-    name: 'Пение птиц',
-    icon: '🐦',
-    color: '#6bcf7f',
-    description: 'Высокочастотные трели, природная вариативность',
-    temporalPatterns: {
-      centroidStd: { min: 300, max: 1500 },
-      fluxStd: { min: 0.3, max: 1.5 },
-      rmsStd: { min: 0.01, max: 0.08 },
-      activityRatio: { min: 0.6, max: 0.9 },
-      volumeTrend: ['fluctuating', 'modulated'],
-      frequencyTrend: ['oscillating', 'modulated'],
-      periodicity: ['irregular', 'semiRegular'],
-      attackPattern: ['rapid'],
-      decayPattern: ['rapid'],
-      longTermStability: ['low'],
-    },
+ 
+  OFFICE_NOISE_PATTERN: {
+    key: 'OFFICE',
+    name: 'Офис',
+    icon: '💨',
+    color: '#8521ac',
+    description: 'Неровный шум с элементами звуков телевизора',
     thresholds: {
-      centroid: { min: 1800, max: 4500 },
-      flux: { min: 0.6, max: 2.8 },
-      rms: { min: 0.025, max: 0.18 },
+      centroid: { min: 1500, max: 5000 },    // Сужу диапазон
+      flux: { min: 0.3, max: 1.5 },
+      rms: { min: 0.05, max: 0.25 }
     },
-  },
-  PEOPLE: {
-    key: 'PEOPLE',
-    name: 'Человеческая речь',
-    icon: '🗣️',
-    color: '#f5a623',
-    description: 'Прерывистая речь с паузами и интонациями',
     temporalPatterns: {
-      centroidStd: { min: 100, max: 600 },
-      fluxStd: { min: 0.2, max: 0.8 },
-      rmsStd: { min: 0.03, max: 0.15 },
-      activityRatio: { min: 0.4, max: 0.7 },
-      volumeTrend: ['modulated', 'fluctuating'],
-      frequencyTrend: ['modulated', 'oscillating'],
-      periodicity: ['irregular', 'semiRegular'],
-      attackPattern: ['variable', 'rapid'],
-      decayPattern: ['variable', 'rapid'],
-      longTermStability: ['medium'],
-    },
-    thresholds: {
-      centroid: { min: 300, max: 1500 },
-      flux: { min: 0.5, max: 2.2 },
-      rms: { min: 0.06, max: 0.38 },
-    },
+      centroidStd: { min: 300, max: 800 },    // Как у вас (753)
+      fluxStd: {min: 0.2, max: 0.62 },
+      rmsStd: { min: 0.03, max: 0.1 },       // Как у вас (0.062)
+      activityRatio: { min: 0.8, max: 1.0 }, // Как у вас (0.987)
+      avgSilenceDuration: { min: 0, max: 0.2 }, // Небольшие паузы
+      avgBurstDuration: { min: 2, max: 10 },    // Длинные всплески
+       volumeTrend: ['increasing', 'fluctuating', 'modulated'],
+      frequencyTrend: ['oscillating', 'modulated', 'fluctuating'],
+      longTermStability: ['veryLow', 'low'],
+      periodicity: ['irregular', 'none'],
+      envelopeShape: ['sustained', 'complex'],
+    }
   },
+
   WIND: {
     key: 'WIND',
     name: 'Ветер',
@@ -145,9 +124,9 @@ export const SOUND_STATES: Record<string, {
     color: '#ff6b6b',
     description: 'Низкочастотный стабильный гул',
     temporalPatterns: {
-      centroidStd: { min: 5, max: 80 },
-      fluxStd: { min: 0.02, max: 0.2 },
-      rmsStd: { min: 0.002, max: 0.03 },
+      centroidStd: { min: 200, max: 1200 },
+      fluxStd: { min: 0.2, max: 0.5 },
+      rmsStd: { min: 0.15, max: 0.7 },
       activityRatio: { min: 0.95, max: 1.0 },
       volumeTrend: ['stable'],
       frequencyTrend: ['stable'],
@@ -162,30 +141,30 @@ export const SOUND_STATES: Record<string, {
       rms: { min: 0.08, max: 0.45 },
     },
   },
-  EXPLOSION: {
-    key: 'EXPLOSION',
-    name: 'Взрыв',
-    icon: '💥',
-    color: '#ff0000',
-    description: 'Резкий импульсный звук',
-    temporalPatterns: {
-      centroidStd: { min: 200, max: 1000 },
-      fluxStd: { min: 1.0, max: 3.0 },
-      rmsStd: { min: 0.1, max: 0.4 },
-      activityRatio: { min: 0.05, max: 0.3 },
-      volumeTrend: ['peak', 'decreasing'],
-      frequencyTrend: ['downwardSweep', 'decreasing'],
-      periodicity: ['none', 'irregular'],
-      attackPattern: ['impulsive', 'rapid'],
-      decayPattern: ['exponential', 'rapid'],
-      longTermStability: ['veryLow', 'low'],
-    },
-    thresholds: {
-      centroid: { min: 500, max: 3000 },
-      flux: { min: 2.0, max: 5.0 },
-      rms: { min: 0.35, max: 1.2 },
-    },
-  },
+  // EXPLOSION: {
+  //   key: 'EXPLOSION',
+  //   name: 'Взрыв',
+  //   icon: '💥',
+  //   color: '#ff0000',
+  //   description: 'Резкий импульсный звук',
+  //   temporalPatterns: {
+  //     centroidStd: { min: 200, max: 1000 },
+  //     fluxStd: { min: 1.0, max: 3.0 },
+  //     rmsStd: { min: 0.1, max: 0.4 },
+  //     activityRatio: { min: 0.05, max: 0.3 },
+  //     volumeTrend: ['peak', 'decreasing'],
+  //     frequencyTrend: ['downwardSweep', 'decreasing'],
+  //     periodicity: ['none', 'irregular'],
+  //     attackPattern: ['impulsive', 'rapid'],
+  //     decayPattern: ['exponential', 'rapid'],
+  //     longTermStability: ['veryLow', 'low'],
+  //   },
+  //   thresholds: {
+  //     centroid: { min: 500, max: 3000 },
+  //     flux: { min: 2.0, max: 5.0 },
+  //     rms: { min: 0.35, max: 1.2 },
+  //   },
+  // },
   QUIET: {
     key: 'QUIET',
     name: 'Тишина',
@@ -193,10 +172,10 @@ export const SOUND_STATES: Record<string, {
     color: '#6c5ce7',
     description: 'Минимальный фоновый шум',
     temporalPatterns: {
-      centroidStd: { min: 0, max: 50 },
-      fluxStd: { min: 0, max: 0.05 },
-      rmsStd: { min: 0, max: 0.005 },
-      activityRatio: { min: 0, max: 0.05 },
+      centroidStd: { min: 0, max: 300 },
+      fluxStd: { min: 0, max: 0.5 },
+      rmsStd: { min: 0, max: 0.2 },
+      activityRatio: { min: 0, max: 0.1 },
       volumeTrend: ['stable', 'decreasing'],
       frequencyTrend: ['stable'],
       periodicity: ['none'],
@@ -208,30 +187,6 @@ export const SOUND_STATES: Record<string, {
       centroid: { min: 0, max: 150 },
       flux: { min: 0, max: 0.08 },
       rms: { min: 0, max: 0.015 },
-    },
-  },
-  TRAFFIC: {
-    key: 'TRAFFIC',
-    name: 'Городской шум',
-    icon: '🚗',
-    color: '#ffa502',
-    description: 'Непрерывный шум с периодическими всплесками',
-    temporalPatterns: {
-      centroidStd: { min: 50, max: 300 },
-      fluxStd: { min: 0.1, max: 0.6 },
-      rmsStd: { min: 0.01, max: 0.1 },
-      activityRatio: { min: 0.7, max: 0.95 },
-      volumeTrend: ['modulated', 'fluctuating'],
-      frequencyTrend: ['modulated'],
-      periodicity: ['semiRegular', 'irregular'],
-      attackPattern: ['variable', 'rapid'],
-      decayPattern: ['variable', 'smooth'],
-      longTermStability: ['medium', 'low'],
-    },
-    thresholds: {
-      centroid: { min: 200, max: 2000 },
-      flux: { min: 0.3, max: 1.8 },
-      rms: { min: 0.05, max: 0.35 },
     },
   },
 };
