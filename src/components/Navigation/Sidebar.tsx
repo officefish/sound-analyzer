@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useAppStore } from '../../store/app.store';
+//import { useAppStore } from '../../store/app.store';
 import ModuleList from './ModuleList';
 import PluginList from './PluginList';
 
 type SidebarSection = 'modules' | 'plugins';
 
 const Sidebar: React.FC = () => {
-  const { navigationCount } = useAppStore();
+  //const { navigationCount } = useAppStore();
   const [activeSection, setActiveSection] = useState<SidebarSection>('modules');
   
   return (
@@ -65,16 +65,16 @@ const Sidebar: React.FC = () => {
       <div className="flex-shrink-0 p-4 border-t border-white/10">
         <div className="text-gray-500 text-xs space-y-1">
           <div className="flex justify-between">
-            <span>📊 Статистика:</span>
+            <span>📊 Credentials</span>
           </div>
           {/* <div className="flex justify-between text-gray-400">
             <span>⏱ Секундомер:</span>
             <span>{navigationCount.stopwatch} раз</span>
           </div> */}
-          <div className="flex justify-between text-gray-400">
+          {/* <div className="flex justify-between text-gray-400">
             <span>🎤 Микрофон:</span>
             <span>{navigationCount.microphone} раз</span>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

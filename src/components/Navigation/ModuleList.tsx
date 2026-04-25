@@ -3,7 +3,9 @@ import { useAppStore } from '../../store/app.store';
 import { MODULES } from '../../types/modules';
 
 const ModuleList: React.FC = () => {
-  const { currentApp, setCurrentApp, navigationCount } = useAppStore();
+  const { currentApp, setCurrentApp
+    //, navigationCount 
+  } = useAppStore();
   
   return (
     <div className="space-y-2">
@@ -33,11 +35,11 @@ const ModuleList: React.FC = () => {
                 {module.description}
               </div>
             </div>
-            {navigationCount[module.id] > 0 && (
+            {/* {navigationCount[module.id] > 0 && (
               <span className="flex-shrink-0 text-xs text-indigo-400 bg-indigo-500/20 px-2 py-0.5 rounded-full">
                 {navigationCount[module.id]}
               </span>
-            )}
+            )} */}
           </div>
         </button>
       ))}

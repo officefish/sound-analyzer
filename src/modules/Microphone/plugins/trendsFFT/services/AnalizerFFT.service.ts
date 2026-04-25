@@ -46,8 +46,7 @@ export class AudioFileAnalyzerService {
         const result = await unifiedAnalyzer.analyzeBufferWithRaw(
         audioBuffer,
         (
-            //frame, 
-            rawFrame) => {
+            frame, rawFrame) => {
             rawFrames.push(rawFrame);
         },
         (progress, frame, total) => {

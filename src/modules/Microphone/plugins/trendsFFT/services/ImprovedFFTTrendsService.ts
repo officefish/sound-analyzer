@@ -16,15 +16,6 @@ export interface ConfidenceThresholds {
   low: number
 }
 
-/**
- * Улучшенный детектор трендов с приоритетом временных паттернов (70%)
- * Наследует все методы от TrendsDetectorServiceImpl:
- * - EventEmitter методы (on, off, emit, removeAllListeners)
- * - reset(), startCollection(), stopCollection()
- * - addSample(), setConfig(), getConfig()
- * - setPatterns(), getStatus()
- */
-
 export class ImprovedTrendsDetector extends TrendsDetectorServiceImpl {
   protected confidenceThresholds:ConfidenceThresholds = {
     high: 75,

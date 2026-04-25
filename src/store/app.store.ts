@@ -17,12 +17,12 @@ interface AppState {
   updateSettings: (settings: Partial<AppState['settings']>) => void;
   
   // Счётчик переходов для статистики
-  navigationCount: {
-    journal: number;
-    microphone: number;
-    library: number;
-  };
-  incrementNavigationCount: (app: ModuleType) => void;
+  //navigationCount: {
+  //  journal: number;
+  //  microphone: number;
+  //  library: number;
+  //};
+  //incrementNavigationCount: (app: ModuleType) => void;
 }
 
 // Создаём store с persist (сохранение в localStorage)
@@ -34,12 +34,12 @@ export const useAppStore = create<AppState>()(
       setCurrentApp: (app) => 
         set((state) => {
           // Увеличиваем счётчик при смене приложения
-          const newCount = { ...state.navigationCount };
-          newCount[app] = (newCount[app] || 0) + 1;
+          //const newCount = { ...state.navigationCount };
+          //newCount[app] = (newCount[app] || 0) + 1;
           
           return {
             currentApp: app,
-            navigationCount: newCount,
+            //navigationCount: newCount,
           };
         }),
       
@@ -54,24 +54,24 @@ export const useAppStore = create<AppState>()(
         })),
       
       // Статистика навигации
-      navigationCount: {
-        journal: 0,
-        microphone: 0,
-        library: 0,
-      },
-      incrementNavigationCount: (app) =>
-        set((state) => ({
-          navigationCount: {
-            ...state.navigationCount,
-            [app]: (state.navigationCount[app] || 0) + 1,
-          },
-        })),
+      // navigationCount: {
+      //   journal: 0,
+      //   microphone: 0,
+      //   library: 0,
+      // },
+      // incrementNavigationCount: (app) =>
+      //   set((state) => ({
+      //     navigationCount: {
+      //       ...state.navigationCount,
+      //       [app]: (state.navigationCount[app] || 0) + 1,
+      //     },
+      //   })),
     }),
     {
       name: 'stopwatch-app-storage', // ключ в localStorage
       partialize: (state) => ({
         settings: state.settings,
-        navigationCount: state.navigationCount,
+        //navigationCount: state.navigationCount,
       }), // сохраняем только нужные поля
     }
   )
