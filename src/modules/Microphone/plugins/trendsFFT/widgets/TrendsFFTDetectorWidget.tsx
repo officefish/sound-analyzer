@@ -1,15 +1,16 @@
 // src/plugins/microphone2/widgets/TrendsFFTDetectorWidget.tsx
 
-import React, { useState, useEffect } from 'react';
-import { IPlugin } from '../../../../../types/plugins';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { IPlugin } from '../../../../../types/plugins';
 import PluginCard from '../../../../../components/ui/PluginCard';
 import SoundTemplateList from '../components/SoundTemplateList';
 import SoundTemplateEditor from '../components/SoundTemplateEditor';
 import { usePatternTemplatesStore } from '../stores/patterns.store';
-import { TickState } from '../TrendsFFTDetectorPlugin';
+import { AudioAnalysisReport, AudioAnalysisReportGenerator } from '../reports/AnalyzerFFTReport';
 import { SOUND_STATES } from '../types';
 
 type DetectionMode = 'auto' | 'manual';
+export type TickState = 'pending' | 'passed' | 'BIRDS' | 'PEOPLE' | 'WIND' | 'DRONE' | 'EXPLOSION' | 'TRAFFIC' | 'QUIET';
 
 interface TrendsDetectorFFTWidgetProps {
   plugin: IPlugin;
@@ -18,13 +19,41 @@ interface TrendsDetectorFFTWidgetProps {
   isActive: boolean;
 }
 
+// Функция для получения информации о состоянии
+const getStateInfoFromStore = (stateKey: string) => {
+  // Проверяем в системных состояниях
+  if (SOUND_STATES[stateKey]) {
+    return SOUND_STATES[stateKey];
+  }
+  
+  // Проверяем в пользовательских шаблонах из store
+  const templates = usePatternTemplatesStore.getState().templates;
+  const userTemplate = templates.find(t => t.key === stateKey || t.name === stateKey);
+  if (userTemplate) {
+    return {
+      name: userTemplate.name,
+      icon: userTemplate.icon,
+      color: userTemplate.color,
+      description: userTemplate.description,
+    };
+  }
+  
+  return {
+    name: stateKey,
+    icon: '❓',
+    color: '#888888',
+    description: `Неизвестное состояние: ${stateKey}`,
+  };
+};
+
 const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
   plugin,
   context,
   onAction,
   isActive,
 }) => {
-  const [status, setStatus] = useState<any>(null);
+  // Переименовываем status в detectorStatus
+  const [detectorStatus, setDetectorStatus] = useState<any>(null);
   const [config, setConfig] = useState<any>(null);
   const [detectionMode, setDetectionMode] = useState<DetectionMode>('auto');
   const [showSettings, setShowSettings] = useState(false);
@@ -33,22 +62,24 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
   const [currentTickIndex, setCurrentTickIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'detector' | 'templates' | 'editor'>('detector');
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [currentReport, setCurrentReport] = useState<AudioAnalysisReport | null>(null);
+  const [showFullReport, setShowFullReport] = useState(false);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   const templates = usePatternTemplatesStore((state) => state.templates);
   const enabledCount = templates.filter(t => t.isEnabled).length;
   const totalCount = templates.length;
 
-  // Загрузка статуса и настроек
+  // Загрузка статуса детектора
   useEffect(() => {
-    const updateStatus = () => {
+    const updateDetectorStatus = () => {
       if (!isActive) return;
       
       const currentStatus = onAction('getStatus');
       if (currentStatus) {
-        setStatus(currentStatus);
+        setDetectorStatus(currentStatus);
         setDetectionMode(currentStatus.detectionMode || 'auto');
         
-        // Обновляем состояния тактов
         if (currentStatus.tickStates) {
           setTickStates(currentStatus.tickStates);
           setCurrentTickIndex(currentStatus.currentTickIndex || 0);
@@ -61,11 +92,52 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
       }
     };
     
-    updateStatus();
-    const interval = setInterval(updateStatus, 200);
+    updateDetectorStatus();
+    const interval = setInterval(updateDetectorStatus, 200);
     
     return () => clearInterval(interval);
   }, [isActive, onAction]);
+
+  // Загрузка отчета
+  useEffect(() => {
+    const loadReport = () => {
+      const reportId = (detectorStatus?.lastResult as any)?.reportId;
+      
+      if (reportId && detectorStatus?.lastResult?.isDetected) {
+        setIsLoadingReport(true);
+        try {
+          const report = onAction('getReport', reportId);
+          if (report) {
+            setCurrentReport(report);
+          }
+        } catch (error) {
+          console.error('[Widget] Failed to load report:', error);
+        } finally {
+          setIsLoadingReport(false);
+        }
+      } else if (detectorStatus?.lastResult?.isDetected && !reportId && !currentReport) {
+        // Генерируем отчет из результата
+        setIsLoadingReport(true);
+        try {
+          const report = AudioAnalysisReportGenerator.generateFromDetectionResult(
+            detectorStatus.lastResult,
+            {
+              intervalMs: config?.intervalMs || 30,
+              measurementsCount: config?.measurementsCount || 100,
+            },
+            detectorStatus.lastResult.samples || []
+          );
+          setCurrentReport(report);
+        } catch (error) {
+          console.error('[Widget] Failed to generate report:', error);
+        } finally {
+          setIsLoadingReport(false);
+        }
+      }
+    };
+    
+    loadReport();
+  }, [detectorStatus?.lastResult, onAction, config, currentReport]);
 
   const handleModeChange = (mode: DetectionMode) => {
     setDetectionMode(mode);
@@ -86,9 +158,20 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
     onAction('setConfig', { [key]: value });
   };
 
+  const handleExportReport = useCallback((format: 'txt' | 'json' | 'csv' = 'json') => {
+    if (currentReport) {
+      AudioAnalysisReportGenerator.saveReport(currentReport, format);
+    }
+  }, [currentReport]);
+
   const isMicActive = context?.isRecording || false;
-  const canStartManual = detectionMode === 'manual' && !status?.isCollecting && isMicActive;
-  const canStop = status?.isCollecting;
+  const canStartManual = detectionMode === 'manual' && !detectorStatus?.isCollecting && isMicActive;
+  const canStop = detectorStatus?.isCollecting;
+
+  // Функция для получения информации о состоянии
+  const getStateInfo = useCallback((stateKey: string) => {
+    return getStateInfoFromStore(stateKey);
+  }, []);
 
   return (
     <PluginCard plugin={plugin} isActive={isActive}>
@@ -159,12 +242,20 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
           {/* Статус и управление */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${status?.isCollecting ? 'bg-green-500 animate-pulse' : status?.isAnalyzing ? 'bg-blue-500' : 'bg-gray-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${
+                detectorStatus?.isCollecting 
+                  ? 'bg-green-500 animate-pulse' 
+                  : detectorStatus?.isAnalyzing 
+                    ? 'bg-blue-500' 
+                    : 'bg-gray-500'
+              }`} />
               <span className="text-xs text-gray-400">
                 {detectionMode === 'auto' ? (
-                  status?.isAnalyzing ? '🔁 Автоанализ активен' : '⏸ Ожидание микрофона'
+                  detectorStatus?.isAnalyzing ? '🔁 Автоанализ активен' : '⏸ Ожидание микрофона'
                 ) : (
-                  status?.isCollecting ? `📊 Сбор данных... ${status.samplesCollected}/${status?.neededSamples || 100}` : '⏹ Детекция остановлена'
+                  detectorStatus?.isCollecting 
+                    ? `📊 Сбор данных... ${detectorStatus.samplesCollected}/${detectorStatus?.neededSamples || 100}` 
+                    : '⏹ Детекция остановлена'
                 )}
               </span>
             </div>
@@ -190,16 +281,14 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
           </div>
 
           {/* Визуализация тактов */}
-          {status?.neededSamples > 0 && tickStates.length > 0 && (
+          {detectorStatus?.neededSamples > 0 && tickStates.length > 0 && (
             <div className="space-y-2">
               <div className="flex justify-between text-[9px] text-gray-500">
                 <span>Статус тактов:</span>
-                <span>{status.samplesCollected || currentTickIndex}/{status.neededSamples}</span>
+                <span>{detectorStatus.samplesCollected || currentTickIndex}/{detectorStatus.neededSamples}</span>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {tickStates.map((state: TickState, idx: number) => {
-                  let bgColor = 'bg-base-300';
-                  let textColor = 'text-base-content';
                   let content = `${idx + 1}`;
                   
                   if (state !== 'pending' && state !== 'passed') {
@@ -222,7 +311,7 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
                     }
                   }
                   
-                  if (status?.isCollecting && idx === currentTickIndex) {
+                  if (detectorStatus?.isCollecting && idx === currentTickIndex) {
                     return (
                       <div
                         key={idx}
@@ -247,7 +336,7 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
                   return (
                     <div
                       key={idx}
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${bgColor} ${textColor}`}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-xs bg-base-300 text-base-content"
                     >
                       {content}
                     </div>
@@ -257,7 +346,7 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
               <div className="flex justify-center gap-3 text-[8px] text-gray-500">
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-primary" />
-                  <span>🚁 Обнаружено</span>
+                  <span>Обнаружено</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-base-300 border-2 border-primary" />
@@ -268,7 +357,7 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
                   <span>Текущий</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-base-300 border border-base-300" />
+                  <div className="w-3 h-3 rounded bg-base-300" />
                   <span>Ожидание</span>
                 </div>
               </div>
@@ -276,16 +365,16 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
           )}
 
           {/* Прогресс текущего анализа */}
-          {status?.isCollecting && (
+          {detectorStatus?.isCollecting && (
             <div className="space-y-1">
               <div className="flex justify-between text-[10px]">
                 <span className="text-gray-500">Прогресс сбора:</span>
-                <span className="text-primary font-mono">{Math.round(status.currentAnalysisProgress || 0)}%</span>
+                <span className="text-primary font-mono">{Math.round(detectorStatus.currentAnalysisProgress || 0)}%</span>
               </div>
               <div className="relative h-1.5 bg-gray-700 rounded-full overflow-hidden">
                 <div 
                   className="absolute left-0 top-0 h-full bg-primary rounded-full transition-all duration-300"
-                  style={{ width: `${status.currentAnalysisProgress || 0}%` }}
+                  style={{ width: `${detectorStatus.currentAnalysisProgress || 0}%` }}
                 />
               </div>
             </div>
@@ -296,17 +385,17 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
             <div className="text-[9px] text-gray-500 text-center mb-1">📊 Статистика анализов</div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
-                <div className="text-lg font-bold text-primary">{status?.totalAnalyses || 0}</div>
+                <div className="text-lg font-bold text-primary">{detectorStatus?.totalAnalyses || 0}</div>
                 <div className="text-[8px] text-gray-500">Всего</div>
               </div>
               <div>
-                <div className="text-lg font-bold text-warning">{status?.detectionCount || 0}</div>
+                <div className="text-lg font-bold text-warning">{detectorStatus?.detectionCount || 0}</div>
                 <div className="text-[8px] text-gray-500">Обнаружений</div>
               </div>
               <div>
                 <div className="text-lg font-bold text-success">
-                  {status?.totalAnalyses > 0 
-                    ? Math.round(((status?.successfulDetections || 0) / (status?.totalAnalyses || 1)) * 100)
+                  {detectorStatus?.totalAnalyses > 0 
+                    ? Math.round(((detectorStatus?.successfulDetections || 0) / (detectorStatus?.totalAnalyses || 1)) * 100)
                     : 0}%
                 </div>
                 <div className="text-[8px] text-gray-500">Успешность</div>
@@ -315,56 +404,158 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
           </div>
 
           {/* Результат детекции */}
-          {status?.lastResult && (
-            <div className={`p-3 rounded-xl ${status.lastResult.isDetected ? 'bg-red-500/20 border border-red-500/30' : 'bg-green-500/10 border border-green-500/20'}`}>
+          {detectorStatus?.lastResult && (
+            <div className={`p-3 rounded-xl ${
+              detectorStatus.lastResult.isDetected 
+                ? 'bg-red-500/20 border border-red-500/30' 
+                : 'bg-green-500/10 border border-green-500/20'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">{status.lastResult.stateIcon}</span>
-                  <span className={`text-sm font-bold ${status.lastResult.isDetected ? 'text-red-400' : 'text-green-400'}`}>
-                    {status.lastResult.stateName}
+                  <span className="text-lg">
+                    {getStateInfo(detectorStatus.lastResult.state).icon}
                   </span>
+                  <span className={`text-sm font-bold ${
+                    detectorStatus.lastResult.isDetected ? 'text-red-400' : 'text-green-400'
+                  }`}>
+                    {getStateInfo(detectorStatus.lastResult.state).name}
+                  </span>
+                  {detectorStatus.lastResult.confidence && (
+                    <span className="text-[10px] bg-primary/20 px-1.5 py-0.5 rounded">
+                      {detectorStatus.lastResult.confidence.toFixed(0)}%
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-gray-500">
-                  {status.lastResult.timestamp ? new Date(status.lastResult.timestamp).toLocaleTimeString() : ''}
+                  {detectorStatus.lastResult.timestamp ? new Date(detectorStatus.lastResult.timestamp).toLocaleTimeString() : ''}
                 </div>
               </div>
               
               <div className="mt-2">
                 <div className="flex justify-between text-[10px] mb-1">
                   <span>Достоверность</span>
-                  <span className="font-bold">{status.lastResult.confidence?.toFixed(1)}%</span>
+                  <span className="font-bold">{detectorStatus.lastResult.confidence?.toFixed(1)}%</span>
                 </div>
                 <div className="relative h-1.5 bg-gray-700 rounded-full overflow-hidden">
                   <div 
                     className="absolute left-0 top-0 h-full bg-primary rounded-full transition-all duration-300"
-                    style={{ width: `${status.lastResult.confidence || 0}%` }}
+                    style={{ width: `${detectorStatus.lastResult.confidence || 0}%` }}
                   />
                 </div>
               </div>
               
-              {status.lastResult.analysis && (
+              {detectorStatus.lastResult.analysis && (
                 <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
                   <div>
                     <span className="text-gray-500">Центр:</span>
                     <span className="text-primary font-mono ml-1">
-                      {status.lastResult.analysis.averageCentroid?.toFixed(0)} Гц
+                      {detectorStatus.lastResult.analysis.averageCentroid?.toFixed(0)} Гц
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Поток:</span>
                     <span className="text-primary font-mono ml-1">
-                      {status.lastResult.analysis.averageFlux?.toFixed(3)}
+                      {detectorStatus.lastResult.analysis.averageFlux?.toFixed(3)}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Активность:</span>
                     <span className="text-primary font-mono ml-1">
-                      {((status.lastResult.analysis.activityRatio || 0) * 100).toFixed(0)}%
+                      {((detectorStatus.lastResult.analysis.activityRatio || 0) * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
               )}
+              
+              {/* Кнопка отчета */}
+              {(currentReport || isLoadingReport) && detectorStatus.lastResult.isDetected && (
+                <div className="mt-3 space-y-2">
+                  <button
+                    onClick={() => setShowFullReport(!showFullReport)}
+                    className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span>{showFullReport ? '▲' : '▼'}</span>
+                    <span>
+                      {isLoadingReport 
+                        ? '⏳ Загрузка отчета...' 
+                        : showFullReport 
+                          ? 'Скрыть детальный отчет' 
+                          : 'Показать детальный отчет'}
+                    </span>
+                  </button>
+                  
+                  {showFullReport && currentReport && !isLoadingReport && (
+                    <div className="mt-2 p-3 bg-base-300/30 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] font-semibold text-gray-400">📊 Детальный отчет</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleExportReport('txt')}
+                            className="text-[9px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-1.5 py-0.5 rounded"
+                          >
+                            TXT
+                          </button>
+                          <button
+                            onClick={() => handleExportReport('json')}
+                            className="text-[9px] bg-green-500/20 hover:bg-green-500/30 text-green-400 px-1.5 py-0.5 rounded"
+                          >
+                            JSON
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-[9px] text-gray-400 space-y-1">
+                        <div>ID: {currentReport.reportId}</div>
+                        <div>Фреймов: {currentReport.analysisConfig.totalFrames}</div>
+                        <div>Активность: {(currentReport.temporalPatterns.activityRatio * 100).toFixed(1)}%</div>
+                        <div>Центр: {currentReport.rawData.centroid.min.toFixed(0)}-{currentReport.rawData.centroid.max.toFixed(0)} Гц</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+          )}
+
+          {/* История обнаружений */}
+          {detectorStatus?.detectionHistory && detectorStatus.detectionHistory.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center gap-1 pt-2"
+              >
+                <span>{showHistory ? '▲' : '▼'}</span>
+                <span>История обнаружений ({detectorStatus.detectionHistory.length})</span>
+              </button>
+
+              {showHistory && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {detectorStatus.detectionHistory.map((result: any, idx: number) => {
+                    const stateInfo = getStateInfo(result.state);
+                    return (
+                      <div 
+                        key={idx}
+                        className="flex items-center justify-between p-2 rounded-lg bg-base-300/30"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{stateInfo.icon}</span>
+                          <div>
+                            <div className="text-xs font-semibold">{stateInfo.name}</div>
+                            <div className="text-[9px] text-gray-500">
+                              {new Date(result.timestamp).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-bold" style={{ color: stateInfo.color }}>
+                            {result.confidence?.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* Настройки */}
@@ -388,7 +579,6 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
                   className="w-full bg-base-300 rounded px-2 py-1 text-xs text-right"
                 />
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs">📊 Количество замеров</label>
                 <input
@@ -399,54 +589,13 @@ const TrendsFFTDetectorWidget: React.FC<TrendsDetectorFFTWidgetProps> = ({
                   className="w-full bg-base-300 rounded px-2 py-1 text-xs text-right"
                 />
               </div>
-              
               <div className="text-[10px] text-center text-gray-500">
                 ⏱ Длительность анализа: {((config?.intervalMs || 30) * (config?.measurementsCount || 100) / 1000).toFixed(1)} сек
               </div>
-
               <div className="text-[9px] text-center text-gray-500">
                 💡 Дрон даёт спектральный центр 200-800 Гц, низкий поток и стабильную громкость
               </div>
             </div>
-          )}
-
-          {/* История */}
-          {status?.detectionHistory && status.detectionHistory.length > 0 && (
-            <>
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="w-full text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center gap-1 pt-2"
-              >
-                <span>{showHistory ? '▲' : '▼'}</span>
-                <span>История обнаружений ({status.detectionHistory.length})</span>
-              </button>
-
-              {showHistory && (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {status.detectionHistory.map((result: any, idx: number) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center justify-between p-2 rounded-lg bg-base-300/30"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{result.stateIcon}</span>
-                        <div>
-                          <div className="text-xs font-semibold">{result.stateName}</div>
-                          <div className="text-[9px] text-gray-500">
-                            {new Date(result.timestamp).toLocaleTimeString()}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-bold" style={{ color: result.stateColor }}>
-                          {result.confidence?.toFixed(1)}%
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
           )}
 
           <div className="text-[10px] text-gray-500 flex justify-between">

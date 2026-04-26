@@ -8,16 +8,10 @@ import { trendsDetectionReport } from '../../../../services/TrendsDetectionRepor
 import { useTelemetryStore } from '../../../../store/telemetry.store';
 import { usePatternTemplatesStore } from './stores/patterns.store';
 import { SOUND_STATES, TrendsDetectionResult } from './types';
+import { AudioAnalysisReport, AudioAnalysisReportGenerator } from './reports/AnalyzerFFTReport';
 
 type DetectionMode = 'manual' | 'auto';
 export type TickState = 'pending' | 'passed' | 'BIRDS' | 'PEOPLE' | 'WIND' | 'DRONE' | 'EXPLOSION' | 'TRAFFIC' | 'QUIET';
-
-interface PluginConfig {
-  detectionMode: DetectionMode;
-  intervalMs: number;
-  measurementsCount: number;
-  enableTelemetry: boolean;
-}
 
 class TrendsFFTDetectorPluginClass implements IPlugin {
   id = 'microphone2-trends-fft-detector';
@@ -44,6 +38,15 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
   private detectionHistory: TrendsDetectionResult[] = [];
   private currentTickStates: TickState[] = [];
   
+  // Управление отчетами
+  private currentReportId: string | null = null;
+  private reports: Map<string, AudioAnalysisReport> = new Map();
+  private isGeneratingReport: boolean = false;
+  //private analysisStartTime: number | null = null;
+  private isAudioStreamAvailable: boolean = false;
+  private isRecordingActive: boolean = false;
+  private isAutoModeRestarting: boolean = false;
+  
   settings = {
     detectionMode: 'auto' as DetectionMode,
     enableTelemetry: true,
@@ -59,8 +62,6 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     width: 'full',
     component: TrendsFFTDetectorWidget,
   };
-
-  private currentReportId: string | null = null;
   
   private generateReportUniqueId(): string {
     const timestamp = Date.now();
@@ -68,14 +69,15 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     return `${timestamp}_${random}`;
   }
   
+  private isReportIdUsed(reportId: string): boolean {
+    return this.reports.has(reportId);
+  }
+  
   private syncPatternsWithStore(): void {
     try {
       const store = usePatternTemplatesStore.getState();
       const enabledPatterns = store.getTemplatesForDetector();
-      
-      // Обновляем детектор с активными шаблонами
       trendsDetector.setPatterns(enabledPatterns);
-      
       console.log(`[TrendsFFTDetector] Synced ${Object.keys(enabledPatterns).length} enabled patterns`);
     } catch (error) {
       console.error('[TrendsFFTDetector] Failed to sync patterns:', error);
@@ -90,7 +92,6 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     console.log(`  Телеметрия: ${this.settings.enableTelemetry ? 'включена' : 'выключена'}`);
     console.log(`${'='.repeat(60)}\n`);
     
-    // Настройка телеметрии
     if (this.settings.enableTelemetry) {
       this.telemetryModuleId = useTelemetryStore.getState().registerModule('TrendsFFTDetector', {
         version: this.version,
@@ -102,21 +103,17 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       }
     }
     
-    // Подписка на события детектора
     trendsDetector.on('onDetectionResult', this.handleDetectionResult.bind(this));
     trendsDetector.on('onStateDetected', this.handleStateDetected.bind(this));
     trendsDetector.on('onSampleCollected', this.handleSampleCollected.bind(this));
     
-    // Загрузка конфигурации
     this.loadConfig();
     
-    // Инициализация store и синхронизация шаблонов
     try {
       const store = usePatternTemplatesStore.getState();
       store.initializeTemplates();
       this.syncPatternsWithStore();
       
-      // Подписываемся на изменения в store
       this.unsubscribeFromStore = usePatternTemplatesStore.subscribe(() => {
         this.syncPatternsWithStore();
       });
@@ -131,12 +128,10 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
   
   onDeactivate(): void {
     console.log('[TrendsFFTDetector] Модуль остановлен');
-    
-    this.stopAnalysis();
+    this.stopAnalysis(true); // Принудительная остановка без попытки записи
     trendsDetector.reset();
     trendsDetector.removeAllListeners();
     
-    // Отписываемся от store
     if (this.unsubscribeFromStore) {
       this.unsubscribeFromStore();
       this.unsubscribeFromStore = null;
@@ -149,37 +144,69 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
   }
 
   private prepareForAnalysis(): void {
-    this.currentReportId = this.generateReportUniqueId();
-    console.log(`[TrendsFFTDetector] 📝 Generated report ID for analysis: ${this.currentReportId}`);
+    let newReportId: string;
+    do {
+      newReportId = this.generateReportUniqueId();
+    } while (this.isReportIdUsed(newReportId));
+    
+    this.currentReportId = newReportId;
+    this.isGeneratingReport = false;
+    //this.analysisStartTime = Date.now();
+    
+    console.log(`[TrendsFFTDetector] 📝 Prepared report ID: ${this.currentReportId}`);
+  }
+  
+  private checkAudioStream(): boolean {
+    if (!this.currentStream || !this.isRecordingActive) {
+      if (this.isAnalyzing) {
+        console.warn('[TrendsFFTDetector] ⚠️ Audio stream not available, stopping analysis');
+        this.stopAnalysis(true);
+      }
+      return false;
+    }
+    return true;
   }
   
   onModuleEvent(event: string, data: any): void {
     switch (event) {
       case 'recordingStarted':
         console.log('[TrendsFFTDetector] Recording started event received');
+        this.isRecordingActive = true;
+        this.isAudioStreamAvailable = true;
+        
         if (this.detectionMode === 'auto' && !this.isAnalyzing) {
           this.prepareForAnalysis();
           this.startAnalysis();
         }
         break;
+        
       case 'recordingStopped':
         console.log('[TrendsFFTDetector] Recording stopped event received');
-        if (this.detectionMode === 'auto' && this.isAnalyzing) {
-          this.stopAnalysis();
+        this.isRecordingActive = false;
+        
+        // При остановке записи останавливаем анализ без записи в журнал
+        if (this.isAnalyzing) {
+          this.stopAnalysis(true); // true = принудительная остановка без отчета
         }
         break;
+        
       case 'streamAvailable':
         if (data?.stream) {
           this.currentStream = data.stream;
+          this.isAudioStreamAvailable = true;
           console.log('[TrendsFFTDetector] Stream available');
-          if (this.detectionMode === 'auto' && !this.isAnalyzing) {
+          
+          if (this.detectionMode === 'auto' && this.isRecordingActive && !this.isAnalyzing) {
             this.prepareForAnalysis();
             this.startAnalysis();
           }
+        } else {
+          this.isAudioStreamAvailable = false;
+          console.warn('[TrendsFFTDetector] ⚠️ No stream available');
         }
         break;
+        
       default:
-        // Игнорируем другие события
         break;
     }
   }
@@ -234,6 +261,12 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       return;
     }
     
+    // Проверяем наличие аудиопотока
+    if (!this.checkAudioStream()) {
+      console.warn('[TrendsFFTDetector] ⚠️ Cannot start analysis: no audio stream');
+      return;
+    }
+    
     this.isAnalyzing = true;
     
     try {
@@ -258,10 +291,12 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     }
   }
   
-  private stopAnalysis(): void {
+  private stopAnalysis(skipReport: boolean = false): void {
     if (!this.isAnalyzing) {
       return;
     }
+    
+    console.log(`[TrendsFFTDetector] Stopping analysis (skipReport: ${skipReport})`);
     
     this.isAnalyzing = false;
     
@@ -273,13 +308,21 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     audioAnalysis.stop();
     trendsDetector.stopCollection();
     
-    console.log('[TrendsFFTDetector] Analysis stopped');
+    // Если требуется пропустить отчет (при переключении режима или остановке записи)
+    if (skipReport) {
+      console.log('[TrendsFFTDetector] Skipping report generation');
+      this.currentReportId = null;
+      this.isGeneratingReport = false;
+    }
+    
+    this.currentTickStates = [];
+    this.currentAnalysisProgress = 0;
   }
   
   private handleSampleCollected(data: { samplesCount: number; totalNeeded: number }): void {
-    this.currentAnalysisProgress = (data.samplesCount / data.totalNeeded) * 100;
+    if (!this.isAnalyzing) return;
     
-    // Обновляем состояния тактов
+    this.currentAnalysisProgress = (data.samplesCount / data.totalNeeded) * 100;
     this.updateTickStates(data.samplesCount, data.totalNeeded);
     
     if (data.samplesCount === 1) {
@@ -291,15 +334,16 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
   private updateTickStates(samplesCollected: number, totalNeeded: number): void {
     this.currentTickStates = [];
     for (let i = 0; i < totalNeeded; i++) {
-      if (i < samplesCollected) {
-        this.currentTickStates.push('passed');
-      } else {
-        this.currentTickStates.push('pending');
-      }
+      this.currentTickStates.push(i < samplesCollected ? 'passed' : 'pending');
     }
   }
   
   private async handleDetectionResult(result: TrendsDetectionResult): Promise<void> {
+    if (!this.isAnalyzing) {
+      console.log('[TrendsFFTDetector] Ignoring detection result - analysis not active');
+      return;
+    }
+    
     console.log('[TrendsFFTDetector] Detection result:', {
       state: result.stateName,
       confidence: result.confidence,
@@ -310,8 +354,6 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     this.totalAnalyses++;
     this.currentAnalysisProgress = 0;
     this.lastDetectionResult = result;
-    
-    // Обновляем состояния тактов на основе результата
     this.updateTickStatesFromResult(result);
     
     if (result.isDetected) {
@@ -322,31 +364,70 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       if (this.detectionHistory.length > 20) {
         this.detectionHistory.pop();
       }
-    }
-    
-    // Генерация отчета для телеметрии
-    if (this.settings.enableTelemetry && this.currentReportId) {
-      try {
-        const config = trendsDetector.getConfig();
+      
+      // Генерируем отчет только в активном режиме и если есть ID
+      if (this.currentReportId && !this.isGeneratingReport && !this.isReportIdUsed(this.currentReportId)) {
+        this.isGeneratingReport = true;
         
-        await trendsDetectionReport.generateReport(result, config, this.currentReportId);
-        this.currentReportId = null;
-        
-        console.log('[TrendsFFTDetector] Report generated successfully');
-      } catch (error) {
-        console.error('[TrendsFFTDetector] Failed to generate report:', error);
-        this.currentReportId = null;
+        try {
+          const config = trendsDetector.getConfig();
+          
+          const report = AudioAnalysisReportGenerator.generateFromDetectionResult(
+            result,
+            {
+              intervalMs: config.intervalMs,
+              measurementsCount: config.measurementsCount,
+            },
+            result.samples
+          );
+          
+          this.reports.set(this.currentReportId, report);
+          (result as any).reportId = this.currentReportId;
+          
+          if (this.settings.enableTelemetry && this.telemetryModuleId) {
+            await trendsDetectionReport.generateReport(
+              result,
+              {
+                intervalMs: config.intervalMs,
+                measurementsCount: config.measurementsCount,
+              },
+              this.currentReportId
+            );
+            console.log('[TrendsFFTDetector] 📊 Report sent to telemetry/journal:', this.currentReportId);
+          }
+          
+          console.log('[TrendsFFTDetector] ✅ Report generated:', this.currentReportId);
+          
+        } catch (error) {
+          console.error('[TrendsFFTDetector] ❌ Failed to generate report:', error);
+        } finally {
+          this.isGeneratingReport = false;
+        }
       }
     }
     
-    // В авторежиме автоматически запускаем новый анализ
-    if (this.detectionMode === 'auto' && this.isAnalyzing) {
-      setTimeout(() => {
-        if (this.isAnalyzing && this.detectionMode === 'auto') {
-          this.currentReportId = this.generateReportUniqueId();
-          trendsDetector.startCollection();
-        }
-      }, 500);
+    // Автоматический перезапуск в авторежиме
+    if (this.detectionMode === 'auto' && this.isAnalyzing && this.isRecordingActive && this.currentStream) {
+      if (!this.isAutoModeRestarting) {
+        this.isAutoModeRestarting = true;
+        
+        setTimeout(() => {
+          if (this.detectionMode === 'auto' && this.isAnalyzing && this.isRecordingActive && this.currentStream) {
+            // Генерируем новый ID для следующего отчета
+            let newReportId: string;
+            do {
+              newReportId = this.generateReportUniqueId();
+            } while (this.isReportIdUsed(newReportId));
+            
+            this.currentReportId = newReportId;
+            this.isGeneratingReport = false;
+            
+            console.log(`[TrendsFFTDetector] 🔄 Auto-restarting analysis with new report ID: ${this.currentReportId}`);
+            trendsDetector.startCollection();
+          }
+          this.isAutoModeRestarting = false;
+        }, 500);
+      }
     }
   }
   
@@ -357,11 +438,7 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     this.currentTickStates = [];
     for (let i = 0; i < neededSamples; i++) {
       const sample = result.samples[i];
-      if (sample && sample.isValid) {
-        this.currentTickStates.push(result.state as TickState);
-      } else {
-        this.currentTickStates.push('pending');
-      }
+      this.currentTickStates.push(sample && sample.isValid ? result.state as TickState : 'pending');
     }
   }
   
@@ -387,12 +464,14 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       this.saveConfig();
       needsRestart = true;
       
-      if (this.detectionMode === 'auto' && this.currentStream && !this.isAnalyzing) {
+      // При переключении на авторежим, если есть активный поток - запускаем анализ
+      if (this.detectionMode === 'auto' && this.isRecordingActive && this.currentStream && !this.isAnalyzing) {
         this.prepareForAnalysis();
         this.startAnalysis();
       }
+      // При переключении на ручной режим - останавливаем анализ без отчета
       if (this.detectionMode === 'manual' && this.isAnalyzing) {
-        this.stopAnalysis();
+        this.stopAnalysis(true);
       }
     }
     
@@ -408,8 +487,8 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       needsRestart = true;
     }
     
-    if (needsRestart && this.isAnalyzing) {
-      this.stopAnalysis();
+    if (needsRestart && this.isAnalyzing && this.detectionMode === 'auto') {
+      this.stopAnalysis(true);
       this.prepareForAnalysis();
       this.startAnalysis();
     }
@@ -423,42 +502,31 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     let tickStates: TickState[] = [];
     let currentTickIndex = 0;
     
-    // Приоритет 1: Если есть результат последнего анализа
-    if (this.lastDetectionResult && this.lastDetectionResult.samples && this.lastDetectionResult.samples.length > 0) {
+    if (this.lastDetectionResult?.samples?.length) {
       for (let i = 0; i < neededSamples; i++) {
         const sample = this.lastDetectionResult.samples[i];
-        if (sample && sample.isValid) {
-          tickStates.push(this.lastDetectionResult.state as TickState);
-        } else {
-          tickStates.push('pending');
-        }
+        tickStates.push(sample?.isValid ? this.lastDetectionResult.state as TickState : 'pending');
       }
       currentTickIndex = neededSamples;
-    } 
-    // Приоритет 2: Если идет сбор данных
-    else if (detectorStatus.isCollecting) {
+    } else if (detectorStatus.isCollecting) {
       for (let i = 0; i < neededSamples; i++) {
-        if (i < detectorStatus.samplesCollected) {
-          tickStates.push('passed');
-        } else {
-          tickStates.push('pending');
-        }
+        tickStates.push(i < detectorStatus.samplesCollected ? 'passed' : 'pending');
       }
       currentTickIndex = detectorStatus.samplesCollected;
-    } 
-    // Приоритет 3: Нет активного анализа
-    else {
-      for (let i = 0; i < neededSamples; i++) {
-        tickStates.push('pending');
-      }
+    } else {
+      tickStates = Array(neededSamples).fill('pending');
       currentTickIndex = 0;
     }
+    
+    const lastResultWithReportId = this.lastDetectionResult 
+      ? { ...this.lastDetectionResult, reportId: this.currentReportId }
+      : null;
     
     return {
       isAnalyzing: this.isAnalyzing,
       isCollecting: detectorStatus.isCollecting,
       samplesCollected: detectorStatus.samplesCollected,
-      neededSamples: neededSamples,
+      neededSamples,
       currentSample: detectorStatus.currentSample,
       detectionCount: this.detectionCount,
       detectionMode: this.detectionMode,
@@ -467,23 +535,38 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
       currentAnalysisProgress: this.currentAnalysisProgress,
       tickStates,
       currentTickIndex,
-      lastResult: this.lastDetectionResult,
+      lastResult: lastResultWithReportId,
       detectionHistory: this.detectionHistory,
+      currentReportId: this.currentReportId,
+      isAudioStreamAvailable: this.isAudioStreamAvailable,
+      isRecordingActive: this.isRecordingActive,
     };
   }
   
   startDetection(): void {
     console.log('[TrendsFFTDetector] Manual detection start requested');
     
+    if (!this.checkAudioStream()) {
+      console.warn('[TrendsFFTDetector] ⚠️ Cannot start manual detection: no audio stream');
+      return;
+    }
+    
+    // При ручном запуске генерируем новый ID
+    let newReportId: string;
+    do {
+      newReportId = this.generateReportUniqueId();
+    } while (this.isReportIdUsed(newReportId));
+    this.currentReportId = newReportId;
+    this.isGeneratingReport = false;
+    
+    console.log(`[TrendsFFTDetector] Manual detection with report ID: ${this.currentReportId}`);
+    
     if (this.detectionMode === 'manual') {
       if (!this.isAnalyzing) {
-        this.prepareForAnalysis();
         this.startAnalysis();
       }
-      this.currentReportId = this.generateReportUniqueId();
       trendsDetector.startCollection();
     } else if (this.detectionMode === 'auto' && this.isAnalyzing) {
-      this.currentReportId = this.generateReportUniqueId();
       trendsDetector.startCollection();
     }
   }
@@ -503,11 +586,13 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
     this.settings.detectionMode = mode;
     this.saveConfig();
     
-    if (mode === 'auto' && this.currentStream && !this.isAnalyzing) {
+    if (mode === 'auto' && this.isRecordingActive && this.currentStream && !this.isAnalyzing) {
+      this.prepareForAnalysis();
       this.startAnalysis();
     }
+    
     if (mode === 'manual' && this.isAnalyzing) {
-      this.stopAnalysis();
+      this.stopAnalysis(true);
     }
     
     this.currentTickStates = [];
@@ -515,14 +600,26 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
 
   setCustomPatterns(patterns: Record<string, any>): void {
     console.log('[TrendsFFTDetector] Setting custom patterns:', Object.keys(patterns).length);
-    
-    // Объединяем стандартные и пользовательские паттерны
     const allPatterns = { ...SOUND_STATES, ...patterns };
-    
-    // Обновляем детектор
     trendsDetector.setPatterns(allPatterns);
-    
     this.saveConfig();
+  }
+  
+  getReport(reportId: string): AudioAnalysisReport | null {
+    return this.reports.get(reportId) || null;
+  }
+  
+  getLastReport(): AudioAnalysisReport | null {
+    const lastReportId = Array.from(this.reports.keys()).pop();
+    return lastReportId ? this.reports.get(lastReportId) || null : null;
+  }
+  
+  getAllReports(): AudioAnalysisReport[] {
+    return Array.from(this.reports.values());
+  }
+  
+  getCurrentReportId(): string | null {
+    return this.currentReportId;
   }
   
   execute(action: string, data?: any): any {
@@ -541,6 +638,17 @@ class TrendsFFTDetectorPluginClass implements IPlugin {
         return this.setDetectionMode(data);
       case 'setCustomPatterns':
         return this.setCustomPatterns(data);
+      case 'getReport':
+        return this.getReport(data);
+      case 'getLastReport':
+        return this.getLastReport();
+      case 'getAllReports':
+        return this.getAllReports();
+      case 'getCurrentReportId':
+        return this.getCurrentReportId();
+      case 'processAudioFrame':
+        console.debug('[TrendsFFTDetector] Ignoring processAudioFrame action');
+        return null;
       default:
         console.warn('[TrendsFFTDetector] Unknown action:', action);
         return null;
