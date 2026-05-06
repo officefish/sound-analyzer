@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAudioLibrary } from '../../hooks/useAudioLibrary';
 import ModuleHeader from '../../components/ui/ModuleHeader';
 import CollectionList from './components/CollectionList';
-import FileList from './components/FileList';
-import AudioPlayerWithHistogram from './components/AudioPlayerWithHistogram';
-import AddCollectionModal from './components/AddCollectionModal';
-import EditCollectionModal from './components/EditCollectionModal';
-import DeleteConfirmModal from './components/DeleteConfirmModal';
-import UploadFileButton from './components/UploadFileButton';
+import FileList from './components/tracks/FileList';
+import AudioPlayerWithHistogram from './components/visual/AudioPlayerWithHistogram';
+import AddCollectionModal from './components/modals/AddCollectionModal';
+import EditCollectionModal from './components/modals/EditCollectionModal';
+import DeleteConfirmModal from './components/modals/DeleteConfirmModal';
+import UploadFileButton from './components/ui/UploadFileButton';
 import { AudioFile, AudioCollection } from '../../types/audioLibrary';
 
 const Library: React.FC = () => {
@@ -114,7 +114,7 @@ const Library: React.FC = () => {
 
       {/* Плеер с гистограммой */}
       <AudioPlayerWithHistogram
-        //currentFile={currentPlayingFile}
+        currentFile={currentPlayingFile}
         onPlay={handlePlayFile}
         onStop={handleStopPlayback}
       />
@@ -158,8 +158,8 @@ const Library: React.FC = () => {
             collections={otherCollectionsForMove}
             onDeleteFile={handleDeleteFile}
             onMoveFile={handleMoveFile}
-            //onPlayFile={handlePlayFile}
-            //currentPlayingFileId={currentPlayingFile?.id || null}
+            onPlayFile={handlePlayFile}
+            currentPlayingFileId={currentPlayingFile?.id || null}
           />
         </div>
       </div>

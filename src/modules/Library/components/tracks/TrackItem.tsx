@@ -1,13 +1,14 @@
 // src/modules/Library/components/TrackItem.tsx
 
 import React, { useState, useEffect } from 'react';
-import { AudioFile } from '../../../types/audioLibrary';
+import { AudioFile } from '../../../../types/audioLibrary';
 import FileActionsMenu from './FileActionsMenu';
-import { audioPlayback } from '../../../services/AudioPlaybackService';
+import { audioPlayback } from '../../../../services/AudioPlaybackService';
 
 interface TrackItemProps {
   file: AudioFile;
   collections: { id: string; name: string }[];
+  onPlayFile: (file: AudioFile) => void;
   onDeleteFile: (fileId: string) => void;
   onMoveFile: (fileId: string, targetCollectionId: string) => void;
 }
@@ -15,8 +16,10 @@ interface TrackItemProps {
 const TrackItem: React.FC<TrackItemProps> = ({
   file,
   collections,
+  onPlayFile,
   onDeleteFile,
   onMoveFile,
+
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -156,6 +159,7 @@ const TrackItem: React.FC<TrackItemProps> = ({
                 collections={collections}
                 onDelete={() => onDeleteFile(file.id)}
                 onMove={(targetId) => onMoveFile(file.id, targetId)}
+                onPlay={(file) => onPlayFile(file)}
               />
             </div>
           </div>

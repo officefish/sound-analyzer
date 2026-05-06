@@ -1,22 +1,29 @@
 // src/modules/Library/components/FileList.tsx
 
 import React from 'react';
-import { AudioFile } from '../../../types/audioLibrary';
+import { AudioFile } from '../../../../types/audioLibrary';
 import TrackItem from './TrackItem';
 
 interface FileListProps {
   files: AudioFile[];
   collections: { id: string; name: string }[];
+  onPlayFile: (file: AudioFile) => void;
   onDeleteFile: (fileId: string) => void;
   onMoveFile: (fileId: string, targetCollectionId: string) => void;
+  currentPlayingFileId: string | null;
 }
 
 const FileList: React.FC<FileListProps> = ({
   files,
   collections,
+  onPlayFile,
   onDeleteFile,
   onMoveFile,
+  currentPlayingFileId
 }) => {
+
+
+
   return (
     <div className="bg-base-200 rounded-2xl p-4">
      <div className="flex items-center gap-2 mb-3">
@@ -38,6 +45,7 @@ const FileList: React.FC<FileListProps> = ({
               collections={collections}
               onDeleteFile={onDeleteFile}
               onMoveFile={onMoveFile}
+              onPlayFile={onPlayFile}
             />
           ))}
         </div>

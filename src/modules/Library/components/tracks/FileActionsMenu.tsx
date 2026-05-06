@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { AudioFile } from '../../../types/audioLibrary';
+import { AudioFile } from '../../../../types/audioLibrary';
 
 interface FileActionsMenuProps {
   file: AudioFile;
   collections: { id: string; name: string }[];
   onDelete: () => void;
   onMove: (targetCollectionId: string) => void;
+  onPlay: (file: AudioFile) => void;
 }
 
 const FileActionsMenu: React.FC<FileActionsMenuProps> = ({
@@ -16,6 +17,7 @@ const FileActionsMenu: React.FC<FileActionsMenuProps> = ({
   collections,
   onDelete,
   onMove,
+  onPlay
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);

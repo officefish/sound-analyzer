@@ -1,156 +1,296 @@
-// src/services/AudioPlaybackService.ts
-
+// AudioPlaybackService.ts
 import { AudioFile } from '../types/audioLibrary';
-import { audioLibrary } from '../lib/audioLibrary';
 
-type PlaybackEvent = 'play' | 'pause' | 'stop' | 'timeupdate' | 'ended' | 'loadedmetadata';
-
-type PlaybackEventMap = {
-  play: { file: AudioFile };
-  pause: void;
-  stop: void;
-  timeupdate: { currentTime: number };
-  ended: void;
-  loadedmetadata: { duration: number };
-};
-
-type PlaybackEventListener<K extends PlaybackEvent> = (data: PlaybackEventMap[K]) => void;
+type EventCallback = (...args: any[]) => void;
 
 class AudioPlaybackService {
   private audioElement: HTMLAudioElement | null = null;
   private currentFile: AudioFile | null = null;
-  private currentBlobUrl: string | null = null;
-  private listeners: Map<PlaybackEvent, Set<Function>> = new Map();
-  private waveformCache: Map<string, number[]> = new Map();
+  private eventListeners: Map<string, EventCallback[]> = new Map();
+  private isPausedState: boolean = false;
 
-  on<K extends PlaybackEvent>(event: K, callback: PlaybackEventListener<K>) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
+  constructor() {
+    this.initAudioElement();
+  }
+
+  private initAudioElement() {
+    this.audioElement = new Audio();
+    this.audioElement.addEventListener('loadedmetadata', () => {
+      this.emit('loadedmetadata', { duration: this.audioElement?.duration || 0 });
+    });
+    this.audioElement.addEventListener('ended', () => {
+      this.stop();
+    });
+    this.audioElement.addEventListener('timeupdate', () => {
+      // Можно добавить событие timeupdate если нужно
+    });
+  }
+
+  private async loadAudioBlob(source: string | Blob | undefined): Promise<Blob | undefined> {
+    if (!source) {
+      console.error('Audio source is undefined');
+      return undefined;
     }
-    this.listeners.get(event)!.add(callback);
+    
+    if (source instanceof Blob) {
+      return source;
+    }
+    
+    // Если это строка (путь или URL)
+    if (typeof source === 'string') {
+      try {
+        // Для Electron окружения
+        if (window.electronAPI?.readFile) {
+          const buffer = await window.electronAPI.readFile(source);
+          return new Blob([buffer], { type: 'audio/mpeg' });
+        }
+        
+        // Для веб-окружения (через fetch)
+        const response = await fetch(source);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.blob();
+      } catch (error) {
+        console.error('Failed to load audio blob from path:', error);
+        return undefined;
+      }
+    }
+    
+    return undefined;
   }
 
-  off<K extends PlaybackEvent>(event: K, callback: PlaybackEventListener<K>) {
-    this.listeners.get(event)?.delete(callback);
-  }
-
-  private emit<K extends PlaybackEvent>(event: K, data: PlaybackEventMap[K]) {
-    this.listeners.get(event)?.forEach(cb => cb(data));
-  }
-
-  private isElectron(): boolean {
-    return !!(window.electronAPI);
-  }
-
-  private revokeCurrentUrl() {
-    if (this.currentBlobUrl) {
-      URL.revokeObjectURL(this.currentBlobUrl);
-      this.currentBlobUrl = null;
+  // ✅ Исправленный метод generateWaveform
+  async generateWaveform(audioFile: AudioFile, bars: number = 200): Promise<number[]> {
+    try {
+      // Сначала пробуем использовать blob, если есть
+      let blob = audioFile.blob;
+      
+      // Если blob нет, пробуем загрузить по пути
+      if (!blob && audioFile.path) {
+        blob = await this.loadAudioBlob(audioFile.path) || undefined;
+      }
+      
+      // Если всё еще нет blob, генерируем синтетическую waveform
+      if (!blob) {
+        console.warn('No audio data available, generating synthetic waveform');
+        return this.generateSyntheticWaveform(bars);
+      }
+      
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      // Создаем AudioContext только когда нужен
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      
+      try {
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const channelData = audioBuffer.getChannelData(0); // Левый канал
+        
+        const samplesPerBar = Math.floor(channelData.length / bars);
+        const amplitudes: number[] = [];
+        
+        // Для более реалистичной waveform используем RMS (Root Mean Square)
+        for (let i = 0; i < bars; i++) {
+          const start = i * samplesPerBar;
+          const end = Math.min(start + samplesPerBar, channelData.length);
+          
+          let sumSquares = 0;
+          let peak = 0;
+          
+          for (let j = start; j < end; j++) {
+            const sample = Math.abs(channelData[j]);
+            sumSquares += sample * sample;
+            if (sample > peak) peak = sample;
+          }
+          
+          // Используем комбинацию RMS и Peak для лучшего визуального эффекта
+          const rms = Math.sqrt(sumSquares / (end - start));
+          const amplitude = Math.min(1, (rms + peak * 0.3) * 1.5);
+          
+          amplitudes.push(amplitude);
+        }
+        
+        // Применяем сглаживание для плавных переходов
+        const smoothedAmplitudes = this.smoothArray(amplitudes, 3);
+        
+        // Нормализуем для лучшей видимости
+        const maxAmp = Math.max(...smoothedAmplitudes);
+        const normalizedAmplitudes = maxAmp > 0 
+          ? smoothedAmplitudes.map(a => Math.min(1, a / maxAmp * 0.9)) 
+          : smoothedAmplitudes;
+        
+        return normalizedAmplitudes;
+        
+      } finally {
+        await audioContext.close();
+      }
+      
+    } catch (error) {
+      console.error('Error generating waveform:', error);
+      // Возвращаем реалистичную синтетическую waveform
+      return this.generateSyntheticWaveform(bars);
     }
   }
 
-  async play(file: AudioFile) {
-    console.log('🎵 Playing file:', file.name);
+  // ✅ Сглаживание массива
+  private smoothArray(arr: number[], windowSize: number): number[] {
+    const result: number[] = [];
+    const halfWindow = Math.floor(windowSize / 2);
+    
+    for (let i = 0; i < arr.length; i++) {
+      let sum = 0;
+      let count = 0;
+      
+      for (let j = -halfWindow; j <= halfWindow; j++) {
+        const index = i + j;
+        if (index >= 0 && index < arr.length) {
+          sum += arr[index];
+          count++;
+        }
+      }
+      
+      result.push(sum / count);
+    }
+    
+    return result;
+  }
+
+  // ✅ Генерация синтетической waveform
+  private generateSyntheticWaveform(bars: number): number[] {
+    const amplitudes: number[] = [];
+    
+    // Создаем несколько "секций" с разной громкостью (как в реальной музыке)
+    const sections = [
+      { start: 0, end: 0.15, intensity: 0.3 },   // Интро - тихо
+      { start: 0.15, end: 0.35, intensity: 0.7 }, // Вступление - средняя громкость
+      { start: 0.35, end: 0.65, intensity: 0.9 }, // Припев/Кульминация - громко
+      { start: 0.65, end: 0.85, intensity: 0.6 }, // Бридж - средняя
+      { start: 0.85, end: 1.0, intensity: 0.4 }    // Затихание
+    ];
+    
+    for (let i = 0; i < bars; i++) {
+      const position = i / bars;
+      
+      // Находим текущую секцию
+      let currentSection = sections[0];
+      for (const section of sections) {
+        if (position >= section.start && position <= section.end) {
+          currentSection = section;
+          break;
+        }
+      }
+      
+      // Базовый envelope
+      let amplitude = currentSection.intensity;
+      
+      // Добавляем ритмические паттерны (удары барабанов)
+      const beatPosition = (position * 4) % 1; // 4/4 такт
+      const isBeat = beatPosition < 0.1 || (beatPosition > 0.45 && beatPosition < 0.55);
+      const beatBoost = isBeat ? 0.15 : 0;
+      
+      // Добавляем небольшие флуктуации
+      const fluctuation = Math.sin(position * Math.PI * 12) * 0.08;
+      const microRandom = (Math.random() - 0.5) * 0.05;
+      
+      amplitude += beatBoost + fluctuation + microRandom;
+      
+      // Ограничиваем и добавляем небольшой минимальный уровень
+      amplitude = Math.min(0.95, Math.max(0.08, amplitude));
+      
+      amplitudes.push(amplitude);
+    }
+    
+    // Применяем сильное сглаживание для реалистичности
+    const smoothed = this.smoothArray(amplitudes, 5);
+    
+    // Добавляем эффект "атаки" в начале каждого такта
+    for (let i = 0; i < smoothed.length; i++) {
+      const beatPhase = (i / smoothed.length * 4) % 1;
+      if (beatPhase < 0.05) {
+        smoothed[i] = Math.min(1, smoothed[i] * 1.2);
+      }
+    }
+    
+    return smoothed;
+  }
+
+  async play(file: AudioFile): Promise<void> {
+    if (!this.audioElement) return;
     
     try {
-      // Останавливаем текущее воспроизведение
-      if (this.audioElement) {
-        this.audioElement.pause();
-        this.audioElement.src = '';
-        this.audioElement = null;
-      }
-      this.revokeCurrentUrl();
-
-      let audioUrl: string;
-
-      if (file.blob) {
-        audioUrl = URL.createObjectURL(file.blob);
-        this.currentBlobUrl = audioUrl;
-      } else if (file.path) {
-        audioUrl = await audioLibrary.getFileUrl(file);
-        this.currentBlobUrl = audioUrl;
-      } else {
-        throw new Error('No audio data available');
-      }
-
-      this.audioElement = new Audio();
+      this.stop();
       this.currentFile = file;
       
-      // Принудительно загружаем метаданные
-      this.audioElement.preload = 'metadata';
+      // Получаем blob из файла
+      let blob = file.blob;
       
-      // Обработчик загрузки метаданных
-      this.audioElement.onloadedmetadata = () => {
-        const duration = this.audioElement?.duration || 0;
-        console.log('Metadata loaded, duration:', duration);
-        this.emit('loadedmetadata', { duration });
-      };
-      
-      this.audioElement.onerror = (e) => {
-        console.error('Audio error:', e);
-        console.error('Audio error code:', this.audioElement?.error?.code);
-        console.error('Audio error message:', this.audioElement?.error?.message);
-      };
-      
-      this.audioElement.onended = () => {
-        console.log('Audio ended');
-        this.stop();
-      };
-      
-      this.audioElement.src = audioUrl;
-      this.audioElement.load();
-      
-      // Пробуем воспроизвести
-      const playPromise = this.audioElement.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.error('Play failed:', error);
-        });
+      if (!blob && file.path) {
+        blob = await this.loadAudioBlob(file.path);
       }
       
-    } catch (err) {
-      console.error('Failed to play audio:', err);
+      // ✅ Проверяем, что blob не null
+      if (!blob) {
+        throw new Error('No audio data available - blob is null');
+      }
+      
+      // ✅ Теперь TypeScript знает, что blob точно не null
+      const url = URL.createObjectURL(blob);
+      
+      this.audioElement.src = url;
+      this.audioElement.volume = 0.8;
+      
+      await this.audioElement.play();
+      this.isPausedState = false;
+      
+      this.emit('play', file);
+      
+      // Очищаем URL после загрузки
+      this.audioElement.onloadeddata = () => {
+        URL.revokeObjectURL(url);
+      };
+      
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      throw error;
     }
   }
 
-  pause() {
+  pause(): void {
+    if (this.audioElement && this.currentFile && !this.audioElement.paused) {
+      this.audioElement.pause();
+      this.isPausedState = true;
+      this.emit('pause');
+    }
+  }
+
+  resume(): void {
+    if (this.audioElement && this.currentFile && this.audioElement.paused) {
+      this.audioElement.play();
+      this.isPausedState = false;
+      this.emit('play', this.currentFile);
+    }
+  }
+
+  stop(): void {
     if (this.audioElement) {
       this.audioElement.pause();
-      this.emit('pause', undefined);
+      this.audioElement.currentTime = 0;
+      if (this.audioElement.src) {
+        URL.revokeObjectURL(this.audioElement.src);
+        this.audioElement.src = '';
+      }
+      this.currentFile = null;
+      this.isPausedState = false;
+      this.emit('stop');
     }
   }
 
-  resume() {
-    if (this.audioElement) {
-      this.audioElement.play().catch(err => console.error('Resume failed:', err));
-      this.emit('play', { file: this.currentFile! });
+  seek(time: number): void {
+    if (this.audioElement && this.currentFile && !isNaN(time)) {
+      this.audioElement.currentTime = Math.min(time, this.audioElement.duration);
+      this.emit('seek', { time });
     }
-  }
-
-  stop() {
-    if (this.audioElement) {
-      this.audioElement.pause();
-      this.audioElement.src = '';
-      this.audioElement = null;
-    }
-    this.revokeCurrentUrl();
-    this.currentFile = null;
-    this.emit('stop', undefined);
-  }
-
-  seek(time: number) {
-    if (this.audioElement) {
-      this.audioElement.currentTime = time;
-      this.emit('timeupdate', { currentTime: time });
-    }
-  }
-
-  getCurrentFile(): AudioFile | null {
-    return this.currentFile;
-  }
-
-  isPlaying(): boolean {
-    return this.audioElement !== null && !this.audioElement.paused;
   }
 
   getCurrentTime(): number {
@@ -161,125 +301,47 @@ class AudioPlaybackService {
     return this.audioElement?.duration || 0;
   }
 
-  async generateWaveform(file: AudioFile, barsCount: number = 200): Promise<number[]> {
-    // Проверяем кэш
-    if (this.waveformCache.has(file.id)) {
-      return this.waveformCache.get(file.id)!;
-    }
+  getCurrentFile(): AudioFile | null {
+    return this.currentFile;
+  }
 
-    // В Electron используем только псевдо-волну (без реального анализа)
-    if (this.isElectron()) {
-      console.log('Running in Electron, using pseudo-waveform');
-      const pseudo = this.generatePseudoWaveform(file.name, barsCount);
-      this.waveformCache.set(file.id, pseudo);
-      return pseudo;
-    }
+  isPaused(): boolean {
+    return this.isPausedState || (this.audioElement?.paused ?? true);
+  }
 
-    // В браузере пытаемся получить реальные амплитуды
-    try {
-      console.log('Running in browser, attempting real waveform analysis');
-      const realWaveform = await this.analyzeFromTempElement(file, barsCount);
-      this.waveformCache.set(file.id, realWaveform);
-      return realWaveform;
-    } catch (error) {
-      console.warn('Failed to generate real waveform, using pseudo-waveform:', error);
-      const pseudo = this.generatePseudoWaveform(file.name, barsCount);
-      this.waveformCache.set(file.id, pseudo);
-      return pseudo;
+  on(event: string, callback: EventCallback): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(callback);
+  }
+
+  off(event: string, callback: EventCallback): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
     }
   }
 
-  private async analyzeFromTempElement(file: AudioFile, barsCount: number): Promise<number[]> {
-    try {
-      let arrayBuffer: ArrayBuffer;
-      
-      if (file.blob) {
-        arrayBuffer = await file.blob.arrayBuffer();
-      } else if (file.path) {
-        const url = await audioLibrary.getFileUrl(file);
-        const response = await fetch(url);
-        arrayBuffer = await response.arrayBuffer();
-        audioLibrary.revokeUrl(url);
-      } else {
-        throw new Error('No audio data');
-      }
-
-      const audioContext = new OfflineAudioContext({
-        numberOfChannels: 1,
-        length: 44100 * 10,
-        sampleRate: 44100,
-      });
-      
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const rawData = audioBuffer.getChannelData(0);
-      
-      const samplesPerBar = Math.floor(rawData.length / barsCount);
-      const bars: number[] = [];
-      
-      for (let i = 0; i < barsCount; i++) {
-        let start = i * samplesPerBar;
-        let end = start + samplesPerBar;
-        if (end > rawData.length) end = rawData.length;
-        let maxAmp = 0;
-        for (let s = start; s < end; s++) {
-          const val = Math.abs(rawData[s]);
-          if (val > maxAmp) maxAmp = val;
-        }
-        bars.push(Math.min(1.0, maxAmp * 1.25));
-      }
-      
-      // Сглаживание
-      for (let i = 1; i < bars.length - 1; i++) {
-        bars[i] = (bars[i - 1] + bars[i] + bars[i + 1]) / 3;
-      }
-      
-      return bars;
-      
-    } catch (error) {
-      console.warn('Failed to analyze from temp element:', error);
-      throw error;
+  private emit(event: string, ...args: any[]): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.forEach(callback => callback(...args));
     }
-  }
-
-  private generatePseudoWaveform(seed: string, barsCount: number): number[] {
-    const bars: number[] = [];
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-      hash |= 0;
-    }
-    
-    for (let i = 0; i < barsCount; i++) {
-      const t = i / barsCount;
-      const value = 0.3 + 
-        Math.sin(t * Math.PI * 3 + hash) * 0.3 +
-        Math.sin(t * Math.PI * 7 + hash * 2) * 0.2;
-      bars.push(Math.min(0.9, Math.max(0.2, value)));
-    }
-    
-    return bars;
-  }
-
-  // Очистка ресурсов
-  cleanup() {
-    if (this.audioElement) {
-      this.audioElement.pause();
-      this.audioElement.src = '';
-      this.audioElement = null;
-    }
-    this.revokeCurrentUrl();
-    this.currentFile = null;
   }
 }
 
 export const audioPlayback = new AudioPlaybackService();
 
-// // src/services/AudioPlaybackService.ts
+// src/services/AudioPlaybackService.ts
 
 // import { AudioFile } from '../types/audioLibrary';
 // import { audioLibrary } from '../lib/audioLibrary';
 
-// type PlaybackEvent = 'play' | 'pause' | 'stop' | 'timeupdate' | 'ended' | 'loadedmetadata';
+// type PlaybackEvent = 'play' | 'pause' | 'stop' | 'timeupdate' | 'ended' | 'loadedmetadata' | 'seek';
 
 // type PlaybackEventMap = {
 //   play: { file: AudioFile };
@@ -287,7 +349,9 @@ export const audioPlayback = new AudioPlaybackService();
 //   stop: void;
 //   timeupdate: { currentTime: number };
 //   ended: void;
+//   seek: {time: number};
 //   loadedmetadata: { duration: number };
+//   isPaused: boolean;
 // };
 
 // type PlaybackEventListener<K extends PlaybackEvent> = (data: PlaybackEventMap[K]) => void;
@@ -297,24 +361,8 @@ export const audioPlayback = new AudioPlaybackService();
 //   private currentFile: AudioFile | null = null;
 //   private currentBlobUrl: string | null = null;
 //   private listeners: Map<PlaybackEvent, Set<Function>> = new Map();
-//   private animationFrameId: number | null = null;
-//   private lastTimeUpdate = 0;
-//   private lastEmittedTime = 0;
-
-//   private audioContext: AudioContext | null = null;
-//   private sourceNode: MediaElementAudioSourceNode | null = null;
-//   private analyserNode: AnalyserNode | null = null;
 //   private waveformCache: Map<string, number[]> = new Map();
-//   //private isAnalyzing: boolean = false;
-
-//   // Публичное состояние (простое, без событий)
-//   public state = {
-//     currentFile: null as AudioFile | null,
-//     isPlaying: false,
-//     currentTime: 0,
-//     duration: 0,
-//   };
-
+  
 //   on<K extends PlaybackEvent>(event: K, callback: PlaybackEventListener<K>) {
 //     if (!this.listeners.has(event)) {
 //       this.listeners.set(event, new Set());
@@ -330,6 +378,10 @@ export const audioPlayback = new AudioPlaybackService();
 //     this.listeners.get(event)?.forEach(cb => cb(data));
 //   }
 
+//   private isElectron(): boolean {
+//     return !!(window.electronAPI);
+//   }
+
 //   private revokeCurrentUrl() {
 //     if (this.currentBlobUrl) {
 //       URL.revokeObjectURL(this.currentBlobUrl);
@@ -337,107 +389,46 @@ export const audioPlayback = new AudioPlaybackService();
 //     }
 //   }
 
-//   private updateState() {
-//     this.state = {
-//       currentFile: this.currentFile,
-//       isPlaying: this.isPlaying(),
-//       currentTime: this.getCurrentTime(),
-//       duration: this.getDuration(),
-//     };
-//   }
-
-//   private startProgressTracking() {
-//     if (this.animationFrameId) {
-//       cancelAnimationFrame(this.animationFrameId);
-//       this.animationFrameId = null;
-//     }
-    
-//     const updateProgress = () => {
-//       if (this.audioElement && !this.audioElement.paused && !this.audioElement.ended) {
-//         const now = Date.now();
-//         // Ограничиваем частоту обновлений до 10 раз в секунду
-//         if (now - this.lastTimeUpdate >= 100) {
-//           this.lastTimeUpdate = now;
-//           const currentTime = this.audioElement.currentTime;
-//           // Обновляем состояние только если время изменилось значительно
-//           if (Math.abs(currentTime - this.lastEmittedTime) > 0.05) {
-//             this.lastEmittedTime = currentTime;
-//             this.updateState();
-//             this.emit('timeupdate', { currentTime });
-//           }
-//         }
-//         this.animationFrameId = requestAnimationFrame(updateProgress);
-//       } else {
-//         this.animationFrameId = null;
-//       }
-//     };
-    
-//     if (this.audioElement && !this.audioElement.paused && !this.audioElement.ended) {
-//       this.animationFrameId = requestAnimationFrame(updateProgress);
-//     }
-//   }
-
-//   private stopProgressTracking() {
-//     if (this.animationFrameId) {
-//       cancelAnimationFrame(this.animationFrameId);
-//       this.animationFrameId = null;
-//     }
-//   }
-
 //   async play(file: AudioFile) {
-//     console.log('🎵 Playing file:', file.name);
-    
+//     console.log('🎵 Playing file:', file.name);    
 //     try {
-//       // Очищаем предыдущий контекст
-//       this.cleanup();
+//       // Останавливаем текущее воспроизведение
+//       if (this.audioElement) {
+//         this.audioElement.pause();
+//         this.audioElement.src = '';
+//         this.audioElement = null;
+//       }
+//       this.revokeCurrentUrl();
 
 //       let audioUrl: string;
 
 //       if (file.blob) {
 //         audioUrl = URL.createObjectURL(file.blob);
+//         this.currentBlobUrl = audioUrl;
 //       } else if (file.path) {
 //         audioUrl = await audioLibrary.getFileUrl(file);
+//         this.currentBlobUrl = audioUrl;
 //       } else {
 //         throw new Error('No audio data available');
 //       }
 
-//       this.audioElement = new Audio(audioUrl);
+//       this.audioElement = new Audio();
 //       this.currentFile = file;
-
-//        this.audioElement.onloadedmetadata = () => {
-//           console.log('Metadata loaded, duration:', this.audioElement?.duration);
-//           this.emit('loadedmetadata', { duration: this.audioElement?.duration || 0 });
-//         };
-
-//         this.audioElement.oncanplay = () => {
-//           console.log('Can play, duration:', this.audioElement?.duration);
-//           if (this.audioElement?.duration) {
-//             this.emit('loadedmetadata', { duration: this.audioElement.duration });
-//           }
-//         }
-              
-//       // ✅ В Electron не создаём AudioContext и AnalyserNode
-//       if (!this.isElectron()) {
-//         // В браузере создаём для возможной визуализации
-//         try {
-//           this.audioContext = new AudioContext();
-//           this.sourceNode = this.audioContext.createMediaElementSource(this.audioElement);
-//           this.analyserNode = this.audioContext.createAnalyser();
-//           this.analyserNode.fftSize = 256;
-          
-//           this.sourceNode.connect(this.analyserNode);
-//           this.sourceNode.connect(this.audioContext.destination);
-          
-//           if (this.audioContext.state === 'suspended') {
-//             await this.audioContext.resume();
-//           }
-//         } catch (err) {
-//           console.warn('Failed to create audio context for visualization:', err);
-//         }
-//       }
+      
+//       // Принудительно загружаем метаданные
+//       this.audioElement.preload = 'metadata';
+      
+//       // Обработчик загрузки метаданных
+//       this.audioElement.onloadedmetadata = () => {
+//         const duration = this.audioElement?.duration || 0;
+//         console.log('Metadata loaded, duration:', duration);
+//         this.emit('loadedmetadata', { duration });
+//       };
       
 //       this.audioElement.onerror = (e) => {
 //         console.error('Audio error:', e);
+//         console.error('Audio error code:', this.audioElement?.error?.code);
+//         console.error('Audio error message:', this.audioElement?.error?.message);
 //       };
       
 //       this.audioElement.onended = () => {
@@ -448,13 +439,13 @@ export const audioPlayback = new AudioPlaybackService();
 //       this.audioElement.src = audioUrl;
 //       this.audioElement.load();
       
+//       // Пробуем воспроизвести
 //       const playPromise = this.audioElement.play();
 //       if (playPromise !== undefined) {
 //         playPromise.catch(error => {
 //           console.error('Play failed:', error);
 //         });
 //       }
-      
       
 //     } catch (err) {
 //       console.error('Failed to play audio:', err);
@@ -464,24 +455,18 @@ export const audioPlayback = new AudioPlaybackService();
 //   pause() {
 //     if (this.audioElement) {
 //       this.audioElement.pause();
-//       this.stopProgressTracking();
-//       this.updateState();
 //       this.emit('pause', undefined);
 //     }
 //   }
 
 //   resume() {
 //     if (this.audioElement) {
-//       this.audioElement.play();
-//       this.updateState();
+//       this.audioElement.play().catch(err => console.error('Resume failed:', err));
 //       this.emit('play', { file: this.currentFile! });
-//       setTimeout(() => this.startProgressTracking(), 100);
 //     }
 //   }
 
 //   stop() {
-//     this.stopProgressTracking();
-    
 //     if (this.audioElement) {
 //       this.audioElement.pause();
 //       this.audioElement.src = '';
@@ -489,15 +474,12 @@ export const audioPlayback = new AudioPlaybackService();
 //     }
 //     this.revokeCurrentUrl();
 //     this.currentFile = null;
-//     this.updateState();
 //     this.emit('stop', undefined);
 //   }
 
 //   seek(time: number) {
 //     if (this.audioElement) {
 //       this.audioElement.currentTime = time;
-//       this.lastEmittedTime = time;
-//       this.updateState();
 //       this.emit('timeupdate', { currentTime: time });
 //     }
 //   }
@@ -518,91 +500,102 @@ export const audioPlayback = new AudioPlaybackService();
 //     return this.audioElement?.duration || 0;
 //   }
 
-//   getState() {
-//     return { ...this.state };
-//   }
-
-//   getProgress(): number {
-//     const duration = this.getDuration();
-//     const currentTime = this.getCurrentTime();
-//     if (duration === 0) return 0;
-//     return (currentTime / duration) * 100;
-//   }
-
-//   private isElectron(): boolean {
-//     return !!(window.electronAPI);
-//   }
-
-//   async generateWaveform(file: AudioFile, barsCount: number = 200): Promise<number[]> {
-//     // Проверяем кэш
-//     if (this.waveformCache.has(file.id)) {
-//       return this.waveformCache.get(file.id)!;
-//     }
-
-//     // ✅ В Electron используем только псевдо-волну (без реального анализа)
-//     if (this.isElectron()) {
-//       console.log('Running in Electron, using pseudo-waveform');
-//       const pseudo = this.generatePseudoWaveform(file.name, barsCount);
-//       this.waveformCache.set(file.id, pseudo);
-//       return pseudo;
-//     }
-
-//     // В браузере пытаемся получить реальные амплитуды
+//   async generateRealWaveform(audioFile: AudioFile, bars: number = 200): Promise<number[]> {
+//   return new Promise(async (resolve, reject) => {
 //     try {
-//       console.log('Running in browser, attempting real waveform analysis');
-//       const realWaveform = await this.analyzeFromTempElement(file, barsCount);
-//       this.waveformCache.set(file.id, realWaveform);
-//       return realWaveform;
+//       const blob = audioFile.blob || await this.loadAudioBlob(audioFile.path);
+//       const arrayBuffer = await blob.arrayBuffer();
+//       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+//       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+//       const channelData = audioBuffer.getChannelData(0); // Левый канал
+      
+//       const samplesPerBar = Math.floor(channelData.length / bars);
+//       const amplitudes: number[] = [];
+      
+//       // Сглаживание для более реалистичного вида
+//       const smoothingWindow = 5;
+      
+//       for (let i = 0; i < bars; i++) {
+//         let sum = 0;
+//         const start = i * samplesPerBar;
+//         const end = Math.min(start + samplesPerBar, channelData.length);
+        
+//         // Находим пиковое значение в этом сегменте
+//         for (let j = start; j < end; j++) {
+//           sum += Math.abs(channelData[j]);
+//         }
+        
+//         let amplitude = sum / samplesPerBar;
+//         amplitude = Math.min(1, Math.max(0, amplitude * 2)); // Нормализуем
+        
+//         amplitudes.push(amplitude);
+//       }
+      
+//       // Применяем сглаживание для плавных переходов
+//       const smoothedAmplitudes = amplitudes.map((_, i) => {
+//         let sum = 0;
+//         let count = 0;
+//         for (let j = -smoothingWindow; j <= smoothingWindow; j++) {
+//           if (amplitudes[i + j] !== undefined) {
+//             sum += amplitudes[i + j];
+//             count++;
+//           }
+//         }
+//         return sum / count;
+//       });
+      
+//       // Добавляем небольшой шум для натуральности (опционально)
+//       const finalAmplitudes = smoothedAmplitudes.map(amp => {
+//         const noise = Math.random() * 0.05;
+//         return Math.min(1, amp + noise);
+//       });
+      
+//       await audioContext.close();
+//       resolve(finalAmplitudes);
+      
 //     } catch (error) {
-//       console.warn('Failed to generate real waveform, using pseudo-waveform:', error);
-//       const pseudo = this.generatePseudoWaveform(file.name, barsCount);
-//       this.waveformCache.set(file.id, pseudo);
-//       return pseudo;
+//       console.error('Error generating waveform:', error);
+//       // Возвращаем синтетическую, но реалистичную waveform
+//       resolve(this.generateSyntheticWaveform(bars));
 //     }
-//   }
+//   });
+// }
 
-//   // private async analyzeFromCurrentElement(barsCount: number): Promise<number[]> {
-//   //   // ✅ Проверяем наличие analyserNode
-//   //   if (!this.analyserNode) {
-//   //     console.warn('No analyser node available');
-//   //     return this.generatePseudoWaveform('no-analyser', barsCount);
-//   //   }
+// // Синтетическая, но реалистичная waveform для демо
+// private generateSyntheticWaveform(bars: number): number[] {
+//   const amplitudes: number[] = [];
+  
+//   for (let i = 0; i < bars; i++) {
+//     // Создаем паттерны, похожие на реальную музыку
+//     const position = i / bars; // 0..1
     
-//   //   try {
-//   //     this.isAnalyzing = true;
-      
-//   //     // Получаем частотные данные
-//   //     const dataArray = new Uint8Array(this.analyserNode.frequencyBinCount);
-//   //     this.analyserNode.getByteFrequencyData(dataArray);
-      
-//   //     // Преобразуем в амплитуды
-//   //     const bars: number[] = [];
-//   //     const step = dataArray.length / barsCount;
-      
-//   //     for (let i = 0; i < barsCount; i++) {
-//   //       const start = Math.floor(i * step);
-//   //       const end = Math.floor((i + 1) * step);
-//   //       let sum = 0;
-//   //       for (let j = start; j < end && j < dataArray.length; j++) {
-//   //         sum += dataArray[j];
-//   //       }
-//   //       const avg = sum / (end - start);
-//   //       const normalized = Math.min(1.0, avg / 128);
-//   //       bars.push(normalized);
-//   //     }
-      
-//   //     this.isAnalyzing = false;
-//   //     return bars;
-      
-//   //   } catch (error) {
-//   //     console.warn('Failed to analyze from current element:', error);
-//   //     this.isAnalyzing = false;
-//   //     return this.generatePseudoWaveform('error', barsCount);
-//   //   }
-//   // }
+//     // Огибающая - тише в начале и конце, громче в середине
+//     const envelope = Math.sin(position * Math.PI);
+    
+//     // Ритмические паттерны
+//     const beatPattern = Math.sin(position * Math.PI * 8) * 0.3;
+//     const fillPattern = Math.sin(position * Math.PI * 16) * 0.15;
+    
+//     // Случайные вариации
+//     const random = Math.random() * 0.2;
+    
+//     let amplitude = envelope + beatPattern + fillPattern + random;
+//     amplitude = Math.min(0.9, Math.max(0.1, amplitude));
+    
+//     amplitudes.push(amplitude);
+//   }
+  
+//   // Применяем сглаживание
+//   for (let i = 0; i < amplitudes.length; i++) {
+//     const neighbors = amplitudes.slice(Math.max(0, i - 2), Math.min(amplitudes.length, i + 3));
+//     amplitudes[i] = neighbors.reduce((a, b) => a + b, 0) / neighbors.length;
+//   }
+  
+//   return amplitudes;
+// }
 
 //   private async analyzeFromTempElement(file: AudioFile, barsCount: number): Promise<number[]> {
-//     // Пробуем через OfflineAudioContext, если не получается — псевдо-волна
 //     try {
 //       let arrayBuffer: ArrayBuffer;
       
@@ -646,52 +639,26 @@ export const audioPlayback = new AudioPlaybackService();
 //         bars[i] = (bars[i - 1] + bars[i] + bars[i + 1]) / 3;
 //       }
       
-//       this.waveformCache.set(file.id, bars);
 //       return bars;
       
 //     } catch (error) {
 //       console.warn('Failed to analyze from temp element:', error);
-//       const pseudo = this.generatePseudoWaveform(file.name, barsCount);
-//       this.waveformCache.set(file.id, pseudo);
-//       return pseudo;
+//       throw error;
 //     }
 //   }
 
-//   private generatePseudoWaveform(seed: string, barsCount: number): number[] {
-//     const bars: number[] = [];
-//     let hash = 0;
-//     for (let i = 0; i < seed.length; i++) {
-//       hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-//       hash |= 0;
-//     }
-    
-//     for (let i = 0; i < barsCount; i++) {
-//       const t = i / barsCount;
-//       const value = 0.3 + 
-//         Math.sin(t * Math.PI * 3 + hash) * 0.3 +
-//         Math.sin(t * Math.PI * 7 + hash * 2) * 0.2;
-//       bars.push(Math.min(0.9, Math.max(0.2, value)));
-//     }
-    
-//     return bars;
-//   }
+  
 
 //   // Очистка ресурсов
 //   cleanup() {
-//     if (this.sourceNode) {
-//       this.sourceNode.disconnect();
-//       this.sourceNode = null;
+//     if (this.audioElement) {
+//       this.audioElement.pause();
+//       this.audioElement.src = '';
+//       this.audioElement = null;
 //     }
-//     if (this.analyserNode) {
-//       this.analyserNode.disconnect();
-//       this.analyserNode = null;
-//     }
-//     if (this.audioContext) {
-//       this.audioContext.close();
-//       this.audioContext = null;
-//     }
+//     this.revokeCurrentUrl();
+//     this.currentFile = null;
 //   }
-
 // }
 
 // export const audioPlayback = new AudioPlaybackService();
