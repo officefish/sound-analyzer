@@ -9,18 +9,22 @@ import Footer from './components/Layout/Footer';
 const Journal = lazy(() => import('./modules/Journal'));
 const Microphone = lazy(() => import('./modules/Microphone'));
 const Library = lazy(() => import('./modules/Library'));
+const Player = lazy(() => import('./modules/Player'));
+
 
 // Маппинг компонентов
 const moduleComponents: Record<ModuleType, React.ComponentType> = {
   microphone: Microphone,
   library: Library,
+  player: Player,
   journal: Journal,
 };
 
 // Обновляем MODULES с реальными компонентами
 MODULES[0].component = Microphone;
 MODULES[1].component = Library;
-MODULES[2].component = Journal;
+MODULES[2].component = Player;
+MODULES[3].component = Journal;
 
 const App: React.FC = () => {
   const { currentApp } = useAppStore();
