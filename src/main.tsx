@@ -4,20 +4,33 @@ import App from './App';
 import './index.css';
 import { registerAllPlugins } from './plugins';
 
+
+interface ElectronAPI {
+  getMediaPath: () => Promise<string>;
+  saveAudioFile: (data: ArrayBuffer, filename: string, collectionName?: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  readFile: (path: string) => Promise<ArrayBuffer>;
+  deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>;
+  listMedia: () => Promise<{ success: boolean; collections?: any[]; error?: string }>;
+  createCollection: (name: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  deleteCollection: (path: string) => Promise<{ success: boolean; error?: string }>;
+  moveFile: (filePath: string, targetCollectionPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  logError: (message: string) => void;  // ✅ Добавлено
+
+  //readFile: (path: string) => Promise<ArrayBuffer>;
+  //deleteFile: (path: string) => Promise<void>;
+
+  writeFile: (path: string, data: ArrayBuffer) => Promise<void>;
+  exists: (path: string) => Promise<boolean>;
+  mkdir: (path: string) => Promise<void>;
+  readdir: (path: string) => Promise<string[]>;
+  copyFile: (from: string, to: string) => Promise<void>;
+  getAppPath: () => string;
+}
+
 // Типы для Electron
 declare global {
   interface Window {
-    electronAPI?: {
-      getMediaPath: () => Promise<string>;
-      saveAudioFile: (data: ArrayBuffer, filename: string, collectionName?: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      readFile: (path: string) => Promise<ArrayBuffer>;
-      deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>;
-      listMedia: () => Promise<{ success: boolean; collections?: any[]; error?: string }>;
-      createCollection: (name: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      deleteCollection: (path: string) => Promise<{ success: boolean; error?: string }>;
-      moveFile: (filePath: string, targetCollectionPath: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-      logError: (message: string) => void;  // ✅ Добавлено
-    };
+    electronAPI?: ElectronAPI
   }
 }
 
