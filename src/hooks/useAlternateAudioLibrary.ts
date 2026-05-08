@@ -1,5 +1,5 @@
-// src/modules/Library/hooks/useAudioLibrary.ts
-import { useEffect, useState } from 'react';
+// src/modules/Library/hooks/useAlternateAudioLibrary.ts
+import { useEffect, useState, useCallback } from 'react';
 import { audioLibraryService } from '../services/audio/AudioLibraryService';
 import type { AudioTrack, AudioCollection } from '../types/audio';
 
@@ -11,9 +11,8 @@ export const useAlternateAudioLibrary = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Подписка на изменения
+  // Загрузка начальных данных
   useEffect(() => {
-    // Загружаем начальные данные
     const loadInitialData = async () => {
       try {
         setIsLoading(true);
@@ -21,9 +20,9 @@ export const useAlternateAudioLibrary = () => {
         setTracks(audioLibraryService.getTracks());
         setIsElectron(audioLibraryService.isElectron());
         
-        // Устанавливаем активную коллекцию по умолчанию
+        // Устанавливаем Buffer как активную коллекцию по умолчанию
         const bufferCollection = audioLibraryService.getCollections().find(c => c.name === 'Buffer');
-        if (bufferCollection && !activeCollectionId) {
+        if (bufferCollection) {
           setActiveCollectionId(bufferCollection.id);
         }
       } catch (err) {
@@ -35,7 +34,7 @@ export const useAlternateAudioLibrary = () => {
     
     loadInitialData();
 
-    // Подписываемся на обновления
+    // Подписка на обновления
     const handleCollectionsUpdate = (updatedCollections: AudioCollection[]) => {
       setCollections(updatedCollections);
     };
@@ -53,84 +52,167 @@ export const useAlternateAudioLibrary = () => {
     };
   }, []);
 
-  // Методы для работы с библиотекой
-  const createCollection = async (name: string, description?: string) => {
-    try {
-      setError(null);
-      return await audioLibraryService.createCollection(name, description);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create collection');
-      throw err;
+  // Добавим forceRefresh метод
+
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+        // Добавим forceRefresh функцию
+        const forceRefresh = useCallback(() => {
+        setRefreshTrigger(prev => prev + 1);
+        setCollections(audioLibraryService.getCollections());
+        setTracks(audioLibraryService.getTracks());
+        }, []);
+
+        // Обновляем addFiles
+    const addFiles = useCallback(async (files: FileList | File[], targetCollectionId?: string) => {
+    const collectionId = targetCollectionId || activeCollectionId;
+    if (!collectionId) {
+        throw new Error('No collection selected');
     }
-  };
-
-  const updateCollection = async (id: string, updates: Partial<AudioCollection>) => {
-    try {
-      setError(null);
-      await audioLibraryService.updateCollection(id, updates);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update collection');
-      throw err;
+    
+    const addedTracks: AudioTrack[] = [];
+    const fileArray = Array.isArray(files) ? files : Array.from(files);
+    
+    for (const file of fileArray) {
+        // ✅ Проверяем аудио формат по расширению
+        const isAudio = file.type.startsWith('audio/') || 
+                        /\.(mp3|wav|ogg|webm|m4a|flac|aac|opus)$/i.test(file.name);
+        
+        if (isAudio) {
+        try {
+            const track = await audioLibraryService.addTrack(file, collectionId);
+            addedTracks.push(track);
+        } catch (err) {
+            console.error(`Failed to add file ${file.name}:`, err);
+            setError(`Failed to add ${file.name}`);
+        }
+        } else {
+        console.warn('Skipping non-audio file:', file.name);
+        setError(`Skipping non-audio file: ${file.name}`);
+        }
     }
-  };
+    
+    // ✅ Принудительно обновляем состояние
+    forceRefresh();
+    
+    return addedTracks;
+    }, [activeCollectionId, forceRefresh]);
 
-  const deleteCollection = async (id: string) => {
+    // Обновляем moveTrack
+    const moveTrack = useCallback(async (trackId: string, targetCollectionId: string) => {
     try {
-      setError(null);
-      await audioLibraryService.deleteCollection(id);
+        setError(null);
+        await audioLibraryService.moveTrackToCollection(trackId, targetCollectionId);
+        // ✅ Принудительно обновляем состояние
+        forceRefresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete collection');
-      throw err;
+        setError(err instanceof Error ? err.message : 'Failed to move track');
+        throw err;
     }
-  };
+    }, [forceRefresh]);
 
-  const addTrack = async (file: File, collectionId?: string) => {
+    // Обновляем deleteTrack
+    const deleteTrack = useCallback(async (trackId: string) => {
     try {
-      setError(null);
-      return await audioLibraryService.addTrack(file, collectionId);
+        setError(null);
+        await audioLibraryService.deleteTrack(trackId);
+        forceRefresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add track');
-      throw err;
+        setError(err instanceof Error ? err.message : 'Failed to delete track');
+        throw err;
     }
-  };
+    }, [forceRefresh]);
 
-  const deleteTrack = async (trackId: string) => {
-    try {
-      setError(null);
-      await audioLibraryService.deleteTrack(trackId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete track');
-      throw err;
-    }
-  };
+    // ✅ Экспорт файла в систему
+    const exportTrack = useCallback(async (track: AudioTrack) => {
+        try {
+        const url = await audioLibraryService.getFileUrl(track);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = track.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }, 100);
+        
+        return true;
+        } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to export file');
+        throw err;
+        }
+    }, []);
 
-  const moveTrackToCollection = async (trackId: string, targetCollectionId: string) => {
-    try {
-      setError(null);
-      await audioLibraryService.moveTrackToCollection(trackId, targetCollectionId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to move track');
-      throw err;
-    }
-  };
+    // ✅ Создание коллекции
+    const createCollection = useCallback(async (name: string, description?: string) => {
+        try {
+        setError(null);
+        const newCollection = await audioLibraryService.createCollection(name, description);
+        return newCollection;
+        } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create collection');
+        throw err;
+        }
+    }, []);
 
-  const getFileUrl = async (track: AudioTrack) => {
-    try {
-      setError(null);
-      return await audioLibraryService.getFileUrl(track);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get file URL');
-      throw err;
-    }
-  };
+    // ✅ Удаление коллекции
+    const deleteCollection = useCallback(async (collectionId: string) => {
+        try {
+        setError(null);
+        await audioLibraryService.deleteCollection(collectionId);
+        
+        // Если удалили активную коллекцию, переключаемся на Buffer
+        if (activeCollectionId === collectionId) {
+            const bufferCollection = collections.find(c => c.name === 'Buffer');
+            if (bufferCollection) {
+            setActiveCollectionId(bufferCollection.id);
+            }
+        }
+        } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete collection');
+        throw err;
+        }
+    }, [activeCollectionId, collections]);
 
-  const revokeUrl = (url: string) => {
-    audioLibraryService.revokeUrl(url);
-  };
+    // ✅ Обновление коллекции
+    const updateCollection = useCallback(async (id: string, updates: Partial<AudioCollection>) => {
+        try {
+        setError(null);
+        await audioLibraryService.updateCollection(id, updates);
+        } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update collection');
+        throw err;
+        }
+    }, []);
 
-  const getTracksByCollection = (collectionId: string) => {
-    return tracks.filter(t => t.collectionId === collectionId);
-  };
+    // ✅ Получение треков коллекции
+    const getTracksByCollection = useCallback((collectionId: string) => {
+        return tracks.filter(t => t.collectionId === collectionId);
+    }, [tracks]);
+
+    // ✅ Получение URL для воспроизведения
+    const getTrackUrl = useCallback(async (track: AudioTrack) => {
+        try {
+        return await audioLibraryService.getFileUrl(track);
+        } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to get track URL');
+        throw err;
+        }
+    }, []);
+
+    // ✅ Освобождение URL
+    const revokeUrl = useCallback((url: string) => {
+        audioLibraryService.revokeUrl(url);
+    }, []);
+
+    // ✅ Проверка, является ли коллекция Buffer
+    const isBufferCollection = useCallback((collectionId: string) => {
+        const collection = collections.find(c => c.id === collectionId);
+        return collection?.name === 'Buffer';
+    }, [collections]);
 
   return {
     // Состояние
@@ -143,14 +225,17 @@ export const useAlternateAudioLibrary = () => {
     
     // Действия
     setActiveCollectionId,
+    addFiles,              // ✅ Добавлено
+    exportTrack,           // ✅ Добавлено
     createCollection,
-    updateCollection,
     deleteCollection,
-    addTrack,
+    updateCollection,
+    moveTrack,             // ✅ Добавлено
     deleteTrack,
-    moveTrackToCollection,
-    getFileUrl,
-    revokeUrl,
     getTracksByCollection,
+    getTrackUrl,
+    revokeUrl,
+    isBufferCollection,    // ✅ Добавлено
+    forceRefresh, // Добавляем если нужно для ручного обновления
   };
 };

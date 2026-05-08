@@ -1,6 +1,6 @@
 import { IPluginContext } from './plugins';
 
-export type ModuleType = 'microphone' | 'library' | 'player' | 'journal'  // | 'proccessing';
+export type ModuleType = 'microphone' | 'library' | 'player' | 'journal' | 'altLibrary';
 
 export interface IModule {
   id: ModuleType;
@@ -35,6 +35,13 @@ export const MODULES: IModule[] = [
   {
     id: 'journal',
     name: 'Журнал',
+    icon: '📋',
+    description: 'Журнал со всеми аналитическими операциями',
+    component: () => null,
+  },
+  {
+    id: 'altLibrary',
+    name: 'Альтернативный Журнал',
     icon: '📋',
     description: 'Журнал со всеми аналитическими операциями',
     component: () => null,

@@ -10,6 +10,7 @@ const Journal = lazy(() => import('./modules/Journal'));
 const Microphone = lazy(() => import('./modules/Microphone'));
 const Library = lazy(() => import('./modules/Library'));
 const Player = lazy(() => import('./modules/Player'));
+const AlternateLibrary = lazy(() => import('./modules/AlternateLibrary'));
 
 
 // Маппинг компонентов
@@ -18,6 +19,7 @@ const moduleComponents: Record<ModuleType, React.ComponentType> = {
   library: Library,
   player: Player,
   journal: Journal,
+  altLibrary: AlternateLibrary
 };
 
 // Обновляем MODULES с реальными компонентами
@@ -25,10 +27,24 @@ MODULES[0].component = Microphone;
 MODULES[1].component = Library;
 MODULES[2].component = Player;
 MODULES[3].component = Journal;
+MODULES[4].component = AlternateLibrary;
 
 const App: React.FC = () => {
-  const { currentApp } = useAppStore();
-  const CurrentComponent = moduleComponents[currentApp];
+  const { currentApp, activeModules, setCurrentApp } = useAppStore();
+
+  React.useEffect(() => {
+    if (activeModules.includes(currentApp)) {
+      return;
+    }
+
+    if (activeModules.length > 0) {
+      setCurrentApp(activeModules[0]);
+    }
+  }, [activeModules, currentApp, setCurrentApp]);
+
+  const CurrentComponent = activeModules.includes(currentApp)
+    ? moduleComponents[currentApp]
+    : moduleComponents[activeModules[0] ?? 'microphone'];
   
   return (
     <div data-theme="dark" className="min-h-screen bg-base-300">

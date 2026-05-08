@@ -1,6 +1,6 @@
 // src/services/audio/AudioLibraryService.ts
 import { AudioTrack, AudioCollection } from '../../types/audio';
-import { fileSystemService } from '../file/FileSystemService';
+import { fileSystemService, getMimeType, isAudioFile } from '../file/FileSystemService';
 import { storageService } from '../storage/StorageService';
 
 type EventCallback = (...args: any[]) => void;
@@ -101,77 +101,172 @@ class AudioLibraryService {
     this.emit('collections-updated', this.collections);
   }
 
-  async addTrack(file: File, collectionId?: string): Promise<AudioTrack> {
-    // Получаем коллекцию
-    let targetCollectionId = collectionId;
-    if (!targetCollectionId) {
-      const bufferCollection = this.collections.find(c => c.name === 'Buffer');
-      if (!bufferCollection) throw new Error('Buffer collection not found');
-      targetCollectionId = bufferCollection.id;
+    async addTrack(file: File, collectionId?: string): Promise<AudioTrack> {
+        // ✅ Проверяем аудио формат
+        if (!isAudioFile(file.name)) {
+        throw new Error(`File ${file.name} is not an audio file`);
+        }
+
+        // Получаем коллекцию
+        let targetCollectionId = collectionId;
+        if (!targetCollectionId) {
+        const bufferCollection = this.collections.find(c => c.name === 'Buffer');
+        if (!bufferCollection) throw new Error('Buffer collection not found');
+        targetCollectionId = bufferCollection.id;
+        }
+
+        // ✅ Сохраняем файл с правильным расширением
+        const originalExt = file.name.split('.').pop()?.toLowerCase() || 'mp3';
+        const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const filePath = await fileSystemService.saveFile(fileName, file, targetCollectionId);
+        
+        // Получаем длительность
+        const duration = await this.getAudioDuration(file);
+        
+        // Создаем трек
+        const newTrack: AudioTrack = {
+        id: this.generateId(),
+        name: file.name,
+        originalName: file.name,
+        path: filePath,
+        collectionId: targetCollectionId,
+        duration,
+        fileSize: file.size,
+        type: getMimeType(file.name),
+        createdAt: new Date(),
+        updatedAt: new Date()
+        };
+        
+        this.tracks.push(newTrack);
+        
+        // Добавляем в коллекцию
+        const targetCollection = this.collections.find(c => c.id === targetCollectionId);
+        if (targetCollection) {
+        targetCollection.trackIds.push(newTrack.id);
+        targetCollection.updatedAt = new Date();
+        }
+        
+        await this.saveAll();
+        
+        // ✅ Эмитим события для обновления UI
+        this.emit('tracks-updated', [...this.tracks]);
+        this.emit('collections-updated', [...this.collections]);
+        
+        return newTrack;
     }
 
-    // Сохраняем файл в файловую систему
-    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const filePath = await fileSystemService.saveFile(fileName, file, targetCollectionId);
-    
-    // Получаем длительность
-    const duration = await this.getAudioDuration(file);
-    
-    // Создаем трек
-    const newTrack: AudioTrack = {
-      id: this.generateId(),
-      name: file.name,
-      originalName: file.name,
-      path: filePath,
-      collectionId: targetCollectionId,
-      duration,
-      fileSize: file.size,
-      type: file.type,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    this.tracks.push(newTrack);
-    
-    // Добавляем в коллекцию
-    const targetCollection = this.collections.find(c => c.id === targetCollectionId);
-    if (targetCollection) {
-      targetCollection.trackIds.push(newTrack.id);
-      targetCollection.updatedAt = new Date();
+    async moveTrackToCollection(trackId: string, targetCollectionId: string): Promise<void> {
+        const track = this.tracks.find(t => t.id === trackId);
+        if (!track) throw new Error('Track not found');
+        
+        const oldCollection = this.collections.find(c => c.id === track.collectionId);
+        const newCollection = this.collections.find(c => c.id === targetCollectionId);
+        
+        if (!oldCollection || !newCollection) throw new Error('Collection not found');
+        
+        // ✅ В Electron физически перемещаем файл
+        const isElectron = fileSystemService.isElectronEnv();
+        if (isElectron) {
+        try {
+            // Получаем новое имя файла (сохраняем оригинальное имя)
+            const fileName = track.path.split('/').pop() || track.name;
+            const newPath = await fileSystemService.moveFile(track.path, targetCollectionId, fileName);
+            track.path = newPath;
+        } catch (error) {
+            console.error('Failed to move file on filesystem:', error);
+            throw error;
+        }
+        }
+        
+        // Обновляем коллекции
+        oldCollection.trackIds = oldCollection.trackIds.filter(id => id !== trackId);
+        oldCollection.updatedAt = new Date();
+        
+        newCollection.trackIds.push(trackId);
+        newCollection.updatedAt = new Date();
+        
+        // Обновляем трек
+        track.collectionId = targetCollectionId;
+        track.updatedAt = new Date();
+        
+        await this.saveAll();
+        
+        // ✅ Эмитим события для обновления UI
+        this.emit('tracks-updated', [...this.tracks]);
+        this.emit('collections-updated', [...this.collections]);
     }
-    
-    await this.saveAll();
-    this.emit('tracks-updated', this.tracks);
-    this.emit('collections-updated', this.collections);
-    
-    return newTrack;
-  }
 
-  async moveTrackToCollection(trackId: string, targetCollectionId: string): Promise<void> {
-    const track = this.tracks.find(t => t.id === trackId);
-    if (!track) throw new Error('Track not found');
+//   async addTrack(file: File, collectionId?: string): Promise<AudioTrack> {
+//     // Получаем коллекцию
+//     let targetCollectionId = collectionId;
+//     if (!targetCollectionId) {
+//       const bufferCollection = this.collections.find(c => c.name === 'Buffer');
+//       if (!bufferCollection) throw new Error('Buffer collection not found');
+//       targetCollectionId = bufferCollection.id;
+//     }
+
+//     // Сохраняем файл в файловую систему
+//     const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+//     const filePath = await fileSystemService.saveFile(fileName, file, targetCollectionId);
     
-    const oldCollection = this.collections.find(c => c.id === track.collectionId);
-    const newCollection = this.collections.find(c => c.id === targetCollectionId);
+//     // Получаем длительность
+//     const duration = await this.getAudioDuration(file);
     
-    if (!oldCollection || !newCollection) throw new Error('Collection not found');
+//     // Создаем трек
+//     const newTrack: AudioTrack = {
+//       id: this.generateId(),
+//       name: file.name,
+//       originalName: file.name,
+//       path: filePath,
+//       collectionId: targetCollectionId,
+//       duration,
+//       fileSize: file.size,
+//       type: file.type,
+//       createdAt: new Date(),
+//       updatedAt: new Date()
+//     };
     
-    // Удаляем из старой коллекции
-    oldCollection.trackIds = oldCollection.trackIds.filter(id => id !== trackId);
-    oldCollection.updatedAt = new Date();
+//     this.tracks.push(newTrack);
     
-    // Добавляем в новую
-    newCollection.trackIds.push(trackId);
-    newCollection.updatedAt = new Date();
+//     // Добавляем в коллекцию
+//     const targetCollection = this.collections.find(c => c.id === targetCollectionId);
+//     if (targetCollection) {
+//       targetCollection.trackIds.push(newTrack.id);
+//       targetCollection.updatedAt = new Date();
+//     }
     
-    // Обновляем трек
-    track.collectionId = targetCollectionId;
-    track.updatedAt = new Date();
+//     await this.saveAll();
+//     this.emit('tracks-updated', this.tracks);
+//     this.emit('collections-updated', this.collections);
     
-    await this.saveAll();
-    this.emit('tracks-updated', this.tracks);
-    this.emit('collections-updated', this.collections);
-  }
+//     return newTrack;
+//   }
+
+//   async moveTrackToCollection(trackId: string, targetCollectionId: string): Promise<void> {
+//     const track = this.tracks.find(t => t.id === trackId);
+//     if (!track) throw new Error('Track not found');
+    
+//     const oldCollection = this.collections.find(c => c.id === track.collectionId);
+//     const newCollection = this.collections.find(c => c.id === targetCollectionId);
+    
+//     if (!oldCollection || !newCollection) throw new Error('Collection not found');
+    
+//     // Удаляем из старой коллекции
+//     oldCollection.trackIds = oldCollection.trackIds.filter(id => id !== trackId);
+//     oldCollection.updatedAt = new Date();
+    
+//     // Добавляем в новую
+//     newCollection.trackIds.push(trackId);
+//     newCollection.updatedAt = new Date();
+    
+//     // Обновляем трек
+//     track.collectionId = targetCollectionId;
+//     track.updatedAt = new Date();
+    
+//     await this.saveAll();
+//     this.emit('tracks-updated', this.tracks);
+//     this.emit('collections-updated', this.collections);
+//   }
 
   async deleteTrack(trackId: string): Promise<void> {
     const track = this.tracks.find(t => t.id === trackId);
@@ -270,6 +365,8 @@ class AudioLibraryService {
   isElectron(): boolean {
     return fileSystemService.isElectronEnv();
   }
+
+  
 }
 
 export const audioLibraryService = new AudioLibraryService();
