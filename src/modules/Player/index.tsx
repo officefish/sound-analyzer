@@ -19,7 +19,8 @@ const Player: React.FC = () => {
     resume,
     stop,
     seek,
-    changeVolume
+    changeVolume,
+    getTrackExportUrl,
   } = usePlayer();
 
   const handlePlayPause = () => {
@@ -40,14 +41,14 @@ const Player: React.FC = () => {
 
   const handleExport = async (track: any) => {
     try {
-      const url = URL.createObjectURL(track.blob);
+      const url = await getTrackExportUrl(track);
       const a = document.createElement('a');
       a.href = url;
       a.download = track.name;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (error) {
       console.error('Export failed:', error);
       alert('Не удалось экспортировать файл');
@@ -63,6 +64,7 @@ const Player: React.FC = () => {
       />
 
       <PlayerControls
+        currentTrackName={currentTrack?.name}
         isPlaying={isPlaying}
         currentTime={currentTime}
         duration={currentTrack?.duration || 0}

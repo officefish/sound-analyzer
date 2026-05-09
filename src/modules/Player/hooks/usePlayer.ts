@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PlayerTrack } from '../types';
+import { audioLibraryService } from '../../../services/audio/AudioLibraryService';
+import { AudioTrack } from '../../../types/audio';
 
 export const usePlayer = () => {
   const [tracks, setTracks] = useState<PlayerTrack[]>([]);
@@ -11,123 +13,38 @@ export const usePlayer = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationRef = useRef<number | null>(null);
 
-  // Загрузка треков из буфера (localStorage или IndexedDB)
+  const mapToPlayerTrack = useCallback((track: AudioTrack): PlayerTrack => ({
+    id: track.id,
+    name: track.name,
+    duration: track.duration || 0,
+    createdAt: new Date(track.createdAt),
+    fileSize: track.fileSize || 0,
+    source: track,
+  }), []);
+
+  const loadTracksFromBuffer = useCallback(() => {
+    const buffer = audioLibraryService.getCollections().find((collection) => collection.name === 'Buffer');
+    if (!buffer) {
+      setTracks([]);
+      return;
+    }
+
+    const bufferTracks = audioLibraryService.getTracksByCollection(buffer.id);
+    setTracks(bufferTracks.map(mapToPlayerTrack));
+  }, [mapToPlayerTrack]);
+
   useEffect(() => {
     loadTracksFromBuffer();
-  }, []);
 
-  const loadTracksFromBuffer = async () => {
-    try {
-      // Загружаем из localStorage
-      const savedTracks = localStorage.getItem('player_tracks');
-      
-      // ✅ Проверяем, есть ли сохраненные треки
-      if (!savedTracks) {
-        console.log('No saved tracks found');
-        setTracks([]);
-        return;
-      }
-      
-      const trackData = JSON.parse(savedTracks);
-      
-      // ✅ Проверяем, что данные не пустые
-      if (!trackData || !Array.isArray(trackData) || trackData.length === 0) {
-        console.log('Empty tracks data');
-        setTracks([]);
-        return;
-      }
-      
-      // Восстанавливаем Blob из base64 или URL
-      const restoredTracks: PlayerTrack[] = [];
-      
-      for (const track of trackData) {
-        try {
-          // ✅ Проверяем существование blobUrl
-          if (!track.blobUrl) {
-            console.warn(`No blobUrl for track ${track.id}`);
-            continue;
-          }
-          
-          // Пытаемся загрузить blob
-          const response = await fetch(track.blobUrl);
-          if (!response.ok) {
-            console.warn(`Failed to fetch blob for track ${track.id}`);
-            continue;
-          }
-          
-          const blob = await response.blob();
-          
-          restoredTracks.push({
-            id: track.id,
-            name: track.name,
-            blob: blob,
-            duration: track.duration || 0,
-            createdAt: new Date(track.createdAt),
-            fileSize: track.fileSize || blob.size
-          });
-        } catch (error) {
-          console.error(`Error restoring track ${track.id}:`, error);
-          // Пропускаем проблемный трек
-          continue;
-        }
-      }
-      
-      setTracks(restoredTracks);
-      
-      // ✅ Очищаем localStorage если все треки были повреждены
-      if (restoredTracks.length === 0 && trackData.length > 0) {
-        localStorage.removeItem('player_tracks');
-      }
-      
-    } catch (error) {
-      console.error('Failed to load tracks:', error);
-      // ✅ В случае ошибки очищаем состояние
-      setTracks([]);
-      localStorage.removeItem('player_tracks');
-    }
-  };
+    const reload = () => loadTracksFromBuffer();
+    audioLibraryService.on('tracks-updated', reload);
+    audioLibraryService.on('collections-updated', reload);
 
-  // Сохранение треков в буфер
-  const saveTracksToBuffer = useCallback(async (newTracks: PlayerTrack[]) => {
-    try {
-      // ✅ Если треков нет, очищаем localStorage
-      if (!newTracks || newTracks.length === 0) {
-        localStorage.removeItem('player_tracks');
-        setTracks([]);
-        return;
-      }
-      
-      // Конвертируем Blob в URL для хранения
-      const tracksForStorage = await Promise.all(
-        newTracks.map(async (track) => {
-          // ✅ Создаем временный URL для blob
-          const blobUrl = URL.createObjectURL(track.blob);
-          
-          return {
-            id: track.id,
-            name: track.name,
-            blobUrl: blobUrl,
-            duration: track.duration,
-            createdAt: track.createdAt.toISOString(),
-            fileSize: track.fileSize
-          };
-        })
-      );
-      
-      localStorage.setItem('player_tracks', JSON.stringify(tracksForStorage));
-      setTracks(newTracks);
-      
-      // ✅ Очищаем URL через некоторое время (они нужны для загрузки)
-      setTimeout(() => {
-        tracksForStorage.forEach(track => {
-          URL.revokeObjectURL(track.blobUrl);
-        });
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Failed to save tracks:', error);
-    }
-  }, []);
+    return () => {
+      audioLibraryService.off('tracks-updated', reload);
+      audioLibraryService.off('collections-updated', reload);
+    };
+  }, [loadTracksFromBuffer]);
 
   // Добавление трека
   const addTrack = useCallback(async (file: File) => {
@@ -138,76 +55,28 @@ export const usePlayer = () => {
         return null;
       }
       
-      const blob = new Blob([await file.arrayBuffer()], { type: file.type });
-      
-      // Получаем длительность
-      const duration = await getAudioDuration(blob);
-      
-      const newTrack: PlayerTrack = {
-        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
-        name: file.name,
-        blob: blob,
-        duration: duration,
-        createdAt: new Date(),
-        fileSize: file.size
-      };
-      
-      const updatedTracks = [newTrack, ...tracks];
-      await saveTracksToBuffer(updatedTracks);
-      
-      return newTrack;
+      const buffer = audioLibraryService.getCollections().find((collection) => collection.name === 'Buffer');
+      const savedTrack = await audioLibraryService.addTrack(file, buffer?.id);
+      const playerTrack = mapToPlayerTrack(savedTrack);
+      loadTracksFromBuffer();
+      return playerTrack;
     } catch (error) {
       console.error('Failed to add track:', error);
       alert('Не удалось добавить трек');
       return null;
     }
-  }, [tracks, saveTracksToBuffer]);
-
-  // Получение длительности аудио
-  const getAudioDuration = (blob: Blob): Promise<number> => {
-    return new Promise((resolve) => {
-      const audio = new Audio();
-      const url = URL.createObjectURL(blob);
-      
-      const cleanup = () => {
-        URL.revokeObjectURL(url);
-        audio.removeEventListener('loadedmetadata', onLoad);
-        audio.removeEventListener('error', onError);
-      };
-      
-      const onLoad = () => {
-        const duration = audio.duration;
-        cleanup();
-        resolve(isNaN(duration) ? 0 : duration);
-      };
-      
-      const onError = () => {
-        cleanup();
-        resolve(0);
-      };
-      
-      audio.addEventListener('loadedmetadata', onLoad);
-      audio.addEventListener('error', onError);
-      audio.src = url;
-      
-      // Таймаут на всякий случай
-      setTimeout(() => {
-        cleanup();
-        resolve(0);
-      }, 5000);
-    });
-  };
+  }, [loadTracksFromBuffer, mapToPlayerTrack]);
 
   // Удаление трека
   const removeTrack = useCallback(async (trackId: string) => {
-    const updatedTracks = tracks.filter(t => t.id !== trackId);
-    await saveTracksToBuffer(updatedTracks);
+    await audioLibraryService.deleteTrack(trackId);
+    loadTracksFromBuffer();
     
     if (currentTrack?.id === trackId) {
       stop();
       setCurrentTrack(null);
     }
-  }, [tracks, currentTrack, saveTracksToBuffer]);
+  }, [currentTrack, loadTracksFromBuffer]);
 
   // Воспроизведение трека
   const playTrack = useCallback(async (track: PlayerTrack) => {
@@ -218,8 +87,7 @@ export const usePlayer = () => {
       if (currentTrack?.id !== track.id) {
         audioRef.current.pause();
         
-        // ✅ Создаем новый URL для blob
-        const url = URL.createObjectURL(track.blob);
+        const url = await audioLibraryService.getFileUrl(track.source);
         audioRef.current.src = url;
         audioRef.current.load();
         
@@ -240,10 +108,6 @@ export const usePlayer = () => {
         setCurrentTrack(track);
         setCurrentTime(0);
         
-        // Очищаем старый URL
-        if (audioRef.current.src) {
-          URL.revokeObjectURL(audioRef.current.src);
-        }
       }
       
       // Воспроизводим
@@ -255,6 +119,10 @@ export const usePlayer = () => {
       alert('Не удалось воспроизвести трек');
     }
   }, [currentTrack]);
+
+  const getTrackExportUrl = useCallback(async (track: PlayerTrack) => {
+    return audioLibraryService.getFileUrl(track.source);
+  }, []);
 
   // Пауза
   const pause = useCallback(() => {
@@ -370,6 +238,7 @@ export const usePlayer = () => {
     resume,
     stop,
     seek,
-    changeVolume
+    changeVolume,
+    getTrackExportUrl,
   };
 };

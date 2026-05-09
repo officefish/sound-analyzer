@@ -1,10 +1,12 @@
+import { AudioTrack } from '../../../types/audio';
+
 export interface PlayerTrack {
   id: string;
   name: string;
-  blob: Blob;
   duration: number;
   createdAt: Date;
   fileSize: number;
+  source: AudioTrack;
 }
 
 export interface PlayerState {

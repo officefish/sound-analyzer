@@ -1,4 +1,3 @@
-// src/modules/Library/components/TrackList.tsx
 import React, { useState } from 'react';
 import type { AudioTrack, AudioCollection } from '../../../types/audio';
 
@@ -8,9 +7,6 @@ interface TrackListProps {
   onMoveTrack: (trackId: string, targetCollectionId: string) => Promise<void>;
   onDeleteTrack: (trackId: string, trackName: string) => void;
   onExportTrack: (trackId: string) => void;
-  onPlayTrack: (track: AudioTrack) => void;
-  currentTrackId: string | null;
-  isPlaying: boolean;
   isBufferCollection: (id: string) => boolean;
 }
 
@@ -20,9 +16,6 @@ const TrackList: React.FC<TrackListProps> = ({
   onMoveTrack,
   onDeleteTrack,
   onExportTrack,
-  onPlayTrack,
-  currentTrackId,
-  isPlaying,
   isBufferCollection,
 }) => {
   const [movingTrackId, setMovingTrackId] = useState<string | null>(null);
@@ -59,27 +52,20 @@ const TrackList: React.FC<TrackListProps> = ({
     );
   }
 
-  // Получаем доступные коллекции для перемещения (исключая текущую и Buffer если нужно)
   const getAvailableCollections = (currentCollectionId: string) => {
-    return collections.filter(c => 
+    return collections.filter((c) =>
       c.id !== currentCollectionId && !isBufferCollection(c.id)
     );
   };
 
   return (
     <div className="space-y-2 max-h-[600px] overflow-y-auto">
-      {tracks.map(track => {
+      {tracks.map((track) => {
         const availableCollections = getAvailableCollections(track.collectionId);
         const isMoving = movingTrackId === track.id;
-        const isCurrentTrack = currentTrackId === track.id;
 
         return (
-          <div
-            key={track.id}
-            className={`bg-base-100 rounded-lg p-3 hover:shadow-md transition-shadow ${
-              isCurrentTrack ? 'ring-1 ring-primary/40' : ''
-            }`}
-          >
+          <div key={track.id} className="bg-base-100 rounded-lg p-3 hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="font-medium truncate" title={track.name}>
@@ -89,14 +75,9 @@ const TrackList: React.FC<TrackListProps> = ({
                   <span>⏱ {formatDuration(track.duration)}</span>
                   <span>💾 {formatFileSize(track.fileSize)}</span>
                   <span>📅 {new Date(track.createdAt).toLocaleDateString()}</span>
-                  {isCurrentTrack && (
-                    <span className="text-primary">
-                      {isPlaying ? '▶ Играет' : '⏸ Пауза'}
-                    </span>
-                  )}
                 </div>
               </div>
-              
+
               <div className="flex gap-2 ml-4">
                 {isMoving ? (
                   <div className="flex gap-2">
@@ -107,7 +88,7 @@ const TrackList: React.FC<TrackListProps> = ({
                       autoFocus
                     >
                       <option value="">Выберите коллекцию...</option>
-                      {availableCollections.map(c => (
+                      {availableCollections.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} ({c.trackIds.length} треков)
                         </option>
@@ -132,14 +113,6 @@ const TrackList: React.FC<TrackListProps> = ({
                   </div>
                 ) : (
                   <>
-                    <button
-                      onClick={() => onPlayTrack(track)}
-                      className="btn btn-xs btn-ghost"
-                      title={isCurrentTrack && isPlaying ? 'Пауза' : 'Воспроизвести'}
-                    >
-                      {isCurrentTrack && isPlaying ? '⏸' : '▶'}
-                    </button>
-
                     {availableCollections.length > 0 && (
                       <button
                         onClick={() => setMovingTrackId(track.id)}
@@ -149,7 +122,7 @@ const TrackList: React.FC<TrackListProps> = ({
                         📁
                       </button>
                     )}
-                    
+
                     <button
                       onClick={() => onExportTrack(track.id)}
                       className="btn btn-xs btn-ghost"
@@ -157,7 +130,7 @@ const TrackList: React.FC<TrackListProps> = ({
                     >
                       📤
                     </button>
-                    
+
                     <button
                       onClick={() => onDeleteTrack(track.id, track.name)}
                       className="btn btn-xs btn-ghost text-error"

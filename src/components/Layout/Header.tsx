@@ -1,8 +1,14 @@
 import React from 'react';
 import { useAppStore } from '../../store/app.store';
+import { audioLibraryService } from '../../services/audio/AudioLibraryService';
 
 const Header: React.FC = () => {
   const { currentApp, settings, updateSettings } = useAppStore();
+  const isElectron = audioLibraryService.isElectron();
+  const storageLabel = isElectron ? 'Electron FS' : 'Web local storage';
+  const storageDescription = isElectron
+    ? 'Файлы хранятся в файловой системе'
+    : 'Файлы хранятся в локальном dev-хранилище';
   
   const getAppTitle = () => {
     switch (currentApp) {
@@ -23,7 +29,7 @@ const Header: React.FC = () => {
             {getAppTitle()}
           </h2>
           <p className="text-gray-400 text-sm mt-0.5">
-            Electron + React + Tailwind + Zustand
+            {storageDescription}
           </p>
         </div>
         
@@ -41,7 +47,7 @@ const Header: React.FC = () => {
           {/* Статус */}
           <div className="flex items-center gap-2 text-xs">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-gray-400">Активно</span>
+            <span className="text-gray-400">{storageLabel}</span>
           </div>
         </div>
       </div>

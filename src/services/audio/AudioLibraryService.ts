@@ -19,15 +19,74 @@ class AudioLibraryService {
     if (this.isInitialized) return;
     await this.loadData();
     this.isInitialized = true;
+    this.emit('collections-updated', [...this.collections]);
+    this.emit('tracks-updated', [...this.tracks]);
   }
 
   private async loadData() {
     this.collections = await storageService.loadCollections();
     this.tracks = await storageService.loadTracks();
+    if (!fileSystemService.isElectronEnv()) {
+      this.tracks = await Promise.all(
+        this.tracks.map(async (track) => {
+          const blob = await storageService.loadTrackBlob(track.id);
+          return { ...track, blob: blob ?? track.blob };
+        })
+      );
+    }
     
     // Создаем стандартную коллекцию "Buffer" если её нет
     if (!this.collections.find(c => c.name === 'Buffer')) {
       await this.createCollection('Buffer', 'Temporary storage for imported tracks');
+    }
+
+    // Восстанавливаем консистентность: удаляем "битые" ссылки на отсутствующие треки
+    this.reconcileCollectionTrackIds();
+    await this.saveAll();
+  }
+
+  private reconcileCollectionTrackIds(): void {
+    const existingTrackIds = new Set(this.tracks.map((track) => track.id));
+    let hasChanges = false;
+
+    this.collections = this.collections.map((collection) => {
+      const validTrackIds = collection.trackIds.filter((trackId) => existingTrackIds.has(trackId));
+      if (validTrackIds.length !== collection.trackIds.length) {
+        hasChanges = true;
+        return {
+          ...collection,
+          trackIds: validTrackIds,
+          updatedAt: new Date(),
+        };
+      }
+      return collection;
+    });
+
+    // Если в треках есть коллекция, которой нет, переносим в Buffer
+    const validCollectionIds = new Set(this.collections.map((collection) => collection.id));
+    const bufferCollection = this.collections.find((collection) => collection.name === 'Buffer');
+    if (bufferCollection) {
+      this.tracks = this.tracks.map((track) => {
+        if (!validCollectionIds.has(track.collectionId)) {
+          hasChanges = true;
+          if (!bufferCollection.trackIds.includes(track.id)) {
+            bufferCollection.trackIds.push(track.id);
+          }
+          return {
+            ...track,
+            collectionId: bufferCollection.id,
+            updatedAt: new Date(),
+          };
+        }
+        return track;
+      });
+    }
+
+    if (hasChanges) {
+      this.collections = this.collections.map((collection) => ({
+        ...collection,
+        trackIds: Array.from(new Set(collection.trackIds)),
+      }));
     }
   }
 
@@ -92,7 +151,10 @@ class AudioLibraryService {
     // Перемещаем треки в буфер
     const bufferCollection = this.collections.find(c => c.name === 'Buffer')!;
     for (const trackId of collection.trackIds) {
-      await this.moveTrackToCollection(trackId, bufferCollection.id);
+      const trackExists = this.tracks.some((track) => track.id === trackId);
+      if (trackExists) {
+        await this.moveTrackToCollection(trackId, bufferCollection.id);
+      }
     }
     
     // Удаляем коллекцию
@@ -101,7 +163,7 @@ class AudioLibraryService {
     this.emit('collections-updated', this.collections);
   }
 
-    async addTrack(file: File, collectionId?: string): Promise<AudioTrack> {
+    async addTrack(file: File, collectionId?: string, durationOverride?: number): Promise<AudioTrack> {
         // ✅ Проверяем аудио формат
         if (!isAudioFile(file.name)) {
         throw new Error(`File ${file.name} is not an audio file`);
@@ -116,14 +178,17 @@ class AudioLibraryService {
         }
 
         // ✅ Сохраняем файл с правильным расширением
-        const originalExt = file.name.split('.').pop()?.toLowerCase() || 'mp3';
         const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const filePath = await fileSystemService.saveFile(fileName, file, targetCollectionId);
         
         // Получаем длительность
-        const duration = await this.getAudioDuration(file);
+        let duration = await this.getAudioDuration(file);
+        if ((!duration || !isFinite(duration) || duration <= 0) && durationOverride && durationOverride > 0) {
+          duration = durationOverride;
+        }
         
         // Создаем трек
+        const isElectron = fileSystemService.isElectronEnv();
         const newTrack: AudioTrack = {
         id: this.generateId(),
         name: file.name,
@@ -134,8 +199,13 @@ class AudioLibraryService {
         fileSize: file.size,
         type: getMimeType(file.name),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        blob: isElectron ? undefined : file,
         };
+
+        if (!isElectron) {
+          await storageService.saveTrackBlob(newTrack.id, file);
+        }
         
         this.tracks.push(newTrack);
         
@@ -272,8 +342,12 @@ class AudioLibraryService {
     const track = this.tracks.find(t => t.id === trackId);
     if (!track) throw new Error('Track not found');
     
-    // Удаляем файл
-    await fileSystemService.deleteFile(track.path);
+    // Удаляем физический файл только в Electron
+    if (fileSystemService.isElectronEnv()) {
+      await fileSystemService.deleteFile(track.path);
+    } else {
+      await storageService.deleteTrackBlob(track.id);
+    }
     
     // Удаляем из коллекции
     const collection = this.collections.find(c => c.id === track.collectionId);
@@ -291,6 +365,16 @@ class AudioLibraryService {
   }
 
   async getFileUrl(track: AudioTrack): Promise<string> {
+    if (track.blob) {
+      return URL.createObjectURL(track.blob);
+    }
+    if (!fileSystemService.isElectronEnv()) {
+      const blob = await storageService.loadTrackBlob(track.id);
+      if (blob) {
+        track.blob = blob;
+        return URL.createObjectURL(blob);
+      }
+    }
     const blob = await fileSystemService.readFile(track.path);
     return URL.createObjectURL(blob);
   }
@@ -303,32 +387,47 @@ class AudioLibraryService {
     return new Promise((resolve) => {
       const audio = new Audio();
       const url = URL.createObjectURL(file);
+      let isResolved = false;
       
       const cleanup = () => {
         URL.revokeObjectURL(url);
         audio.removeEventListener('loadedmetadata', onLoad);
+        audio.removeEventListener('durationchange', onLoad);
+        audio.removeEventListener('canplaythrough', onLoad);
         audio.removeEventListener('error', onError);
       };
       
       const onLoad = () => {
+        if (isResolved) return;
         const duration = audio.duration;
+        if (!isFinite(duration) || isNaN(duration) || duration <= 0) {
+          return;
+        }
+        isResolved = true;
         cleanup();
-        resolve(isNaN(duration) ? 0 : duration);
+        resolve(duration);
       };
       
       const onError = () => {
+        if (isResolved) return;
+        isResolved = true;
         cleanup();
         resolve(0);
       };
       
       audio.addEventListener('loadedmetadata', onLoad);
+      audio.addEventListener('durationchange', onLoad);
+      audio.addEventListener('canplaythrough', onLoad);
       audio.addEventListener('error', onError);
+      audio.preload = 'metadata';
       audio.src = url;
       
       setTimeout(() => {
+        if (isResolved) return;
+        isResolved = true;
         cleanup();
         resolve(0);
-      }, 5000);
+      }, 10000);
     });
   }
 

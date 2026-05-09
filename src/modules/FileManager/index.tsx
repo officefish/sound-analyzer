@@ -1,21 +1,17 @@
-// src/modules/Library/index.tsx
 import React, { useRef, useState } from 'react';
-import { useAlternateAudioLibrary } from '../../hooks/useAlternateAudioLibrary';
+import { useFileManagerLibrary } from '../../hooks/useFileManagerLibrary';
 import ModuleHeader from '../../components/ui/ModuleHeader';
-import PlayerControls from '../Player/components/PlayerControls';
-import type { AudioTrack } from '../../types/audio';
 
 import CollectionList from './components/CollectionList';
 import TrackList from './components/TrackList';
 import AddCollectionModal from './components/modals/AddCollectionModal';
 import DeleteConfirmModal from './components/modals/DeleteConfirmModal';
 
-const AlternateLibrary: React.FC = () => {
+const FileManager: React.FC = () => {
   const {
     collections,
     tracks,
     activeCollectionId,
-    //isElectron,
     isLoading,
     error,
     setActiveCollectionId,
@@ -27,22 +23,15 @@ const AlternateLibrary: React.FC = () => {
     moveTrack,
     deleteTrack,
     getTracksByCollection,
-    getTrackUrl,
     isBufferCollection,
-  } = useAlternateAudioLibrary();
+  } = useFileManagerLibrary();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<any>(null);
   const [deletingItem, setDeletingItem] = useState<{ type: 'collection' | 'track'; id: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(0.8);
-
-  const currentTracks = activeCollectionId 
+  const currentTracks = activeCollectionId
     ? getTracksByCollection(activeCollectionId)
     : [];
 
@@ -80,104 +69,9 @@ const AlternateLibrary: React.FC = () => {
   };
 
   const handleExportTrack = async (trackId: string) => {
-    const track = tracks.find(t => t.id === trackId);
+    const track = tracks.find((t) => t.id === trackId);
     if (track) {
       await exportTrack(track);
-    }
-  };
-
-  React.useEffect(() => {
-    const audio = new Audio();
-    audio.volume = volume;
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime || 0);
-    };
-
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audioRef.current = audio;
-
-    return () => {
-      audio.pause();
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      if (audio.src) {
-        URL.revokeObjectURL(audio.src);
-      }
-    };
-  }, []);
-
-  const playTrack = async (track: AudioTrack) => {
-    if (!audioRef.current) return;
-
-    try {
-      if (currentTrack?.id === track.id) {
-        if (isPlaying) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        } else {
-          await audioRef.current.play();
-          setIsPlaying(true);
-        }
-        return;
-      }
-
-      const nextUrl = await getTrackUrl(track);
-
-      if (audioRef.current.src) {
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-
-      audioRef.current.src = nextUrl;
-      audioRef.current.currentTime = 0;
-      setCurrentTime(0);
-      setCurrentTrack(track);
-
-      await audioRef.current.play();
-      setIsPlaying(true);
-    } catch (err) {
-      console.error('Failed to play track:', err);
-      alert('Не удалось воспроизвести трек');
-    }
-  };
-
-  const handlePlayPause = async () => {
-    if (!audioRef.current || !currentTrack) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      await audioRef.current.play();
-      setIsPlaying(true);
-    }
-  };
-
-  const handleStop = () => {
-    if (!audioRef.current) return;
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    setCurrentTime(0);
-    setIsPlaying(false);
-  };
-
-  const handleSeek = (time: number) => {
-    if (!audioRef.current || !currentTrack) return;
-    const nextTime = Math.max(0, Math.min(time, currentTrack.duration || 0));
-    audioRef.current.currentTime = nextTime;
-    setCurrentTime(nextTime);
-  };
-
-  const handleVolumeChange = (nextVolume: number) => {
-    const normalized = Math.max(0, Math.min(1, nextVolume));
-    setVolume(normalized);
-    if (audioRef.current) {
-      audioRef.current.volume = normalized;
     }
   };
 
@@ -186,7 +80,7 @@ const AlternateLibrary: React.FC = () => {
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="loading loading-spinner loading-lg"></div>
-          <p className="mt-4">Загрузка библиотеки...</p>
+          <p className="mt-4">Загрузка файлового менеджера...</p>
         </div>
       </div>
     );
@@ -197,7 +91,7 @@ const AlternateLibrary: React.FC = () => {
       <div className="flex items-center justify-center h-screen">
         <div className="text-center text-error">
           <p className="text-lg">Ошибка: {error}</p>
-          <button 
+          <button
             className="btn btn-primary mt-4"
             onClick={() => window.location.reload()}
           >
@@ -211,13 +105,12 @@ const AlternateLibrary: React.FC = () => {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <ModuleHeader
-        icon="📚"
-        title="Аудиобиблиотека"
-        description="Управление коллекциями и треками"
+        icon="🗂️"
+        title="Файловый менеджер"
+        description="Стабильная копия текущей альтернативной библиотеки"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        {/* Левая колонка - коллекции */}
         <div className="lg:col-span-1">
           <CollectionList
             collections={collections}
@@ -230,31 +123,18 @@ const AlternateLibrary: React.FC = () => {
           />
         </div>
 
-        {/* Правая колонка - треки */}
         <div className="lg:col-span-2">
-          <PlayerControls
-            currentTrackName={currentTrack?.name}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={currentTrack?.duration || 0}
-            volume={volume}
-            onPlayPause={handlePlayPause}
-            onSeek={handleSeek}
-            onVolumeChange={handleVolumeChange}
-            onStop={handleStop}
-          />
-
           <div className="bg-base-200 rounded-2xl p-4">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h3 className="font-semibold">
-                  {collections.find(c => c.id === activeCollectionId)?.name || 'Треки'}
+                  {collections.find((c) => c.id === activeCollectionId)?.name || 'Треки'}
                 </h3>
                 <p className="text-sm text-base-content/50">
                   {currentTracks.length} треков
                 </p>
               </div>
-              
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="btn btn-primary btn-sm"
@@ -262,7 +142,7 @@ const AlternateLibrary: React.FC = () => {
               >
                 + Добавить треки
               </button>
-              
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -279,16 +159,12 @@ const AlternateLibrary: React.FC = () => {
               onMoveTrack={moveTrack}
               onDeleteTrack={(id) => setDeletingItem({ type: 'track', id })}
               onExportTrack={handleExportTrack}
-              onPlayTrack={playTrack}
-              currentTrackId={currentTrack?.id || null}
-              isPlaying={isPlaying}
               isBufferCollection={isBufferCollection}
             />
           </div>
         </div>
       </div>
 
-      {/* Модальные окна */}
       <AddCollectionModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
@@ -315,9 +191,8 @@ const AlternateLibrary: React.FC = () => {
         onConfirm={deletingItem?.type === 'collection' ? handleDeleteCollection : handleDeleteTrack}
         onClose={() => setDeletingItem(null)}
       />
-    
     </div>
   );
 };
 
-export default AlternateLibrary;
+export default FileManager;

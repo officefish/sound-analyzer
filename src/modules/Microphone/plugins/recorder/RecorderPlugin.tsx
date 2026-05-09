@@ -5,7 +5,7 @@ import { IPlugin, IPluginWidget,
 } from '../../../../types/plugins';
 import RecorderWidget from './widgets/RecorderWidget';
 import { fileSystemService } from './services/FileSystemService';
-import { audioLibrary } from '../../../../lib/audioLibrary';
+import { audioLibraryService } from '../../../../services/audio/AudioLibraryService';
 
 interface ChunkData {
   id: string;
@@ -120,12 +120,18 @@ class RecorderPluginClass implements IPlugin {
   
   // Добавляем поле для хранения поддерживаемых форматов
   private supportedFormats = getSupportedFormats();
+
+  private getBufferCollection() {
+    return audioLibraryService.getCollections().find((collection) => collection.name === 'Buffer');
+  }
   
   // Получение статистики
   private getStats() {
-    // Получаем файлы из коллекции 'buffer' через audioLibrary
-    const bufferFiles = audioLibrary.getFilesByCollection('buffer');
-    const totalSize = bufferFiles.reduce((sum, f) => sum + f.size, 0);
+    const bufferCollection = this.getBufferCollection();
+    const bufferTracks = bufferCollection
+      ? audioLibraryService.getTracksByCollection(bufferCollection.id)
+      : [];
+    const totalSize = bufferTracks.reduce((sum, track) => sum + track.fileSize, 0);
     
     return {
       totalRecordings: this.totalRecordings,
@@ -133,7 +139,7 @@ class RecorderPluginClass implements IPlugin {
       segmentCount: this.segmentCount,
       isRecording: this.isRecordingFlag,
       isAutoRecording: this.isAutoRecordingFlag,
-      chunksCount: bufferFiles.length,
+      chunksCount: bufferTracks.length,
       chunksTotalSize: totalSize,
       currentChunkSize: totalSize,
       maxChunkSize: this.maxChunkSize,
@@ -175,10 +181,17 @@ private async saveSegment(isManual = false): Promise<{ success: boolean; path?: 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `recording_${timestamp}_${duration}ms.${this.settings.format}`;
 
-  // Сохраняем через audioLibrary (единый интерфейс для Electron и браузера)
-  const savedFile = await audioLibrary.saveAudioFile(blob, filename, 'buffer');
+  const bufferCollection = this.getBufferCollection();
+  if (!bufferCollection) {
+    console.error('Buffer collection not found');
+    return { success: false, error: 'Buffer collection not found' };
+  }
 
-  if (savedFile) {
+  const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() });
+  const durationSeconds = Math.max(0, duration / 1000);
+  const savedTrack = await audioLibraryService.addTrack(file, bufferCollection.id, durationSeconds);
+
+  if (savedTrack) {
     // Успешно сохранили (в файловую систему или в память)
     this.totalRecordings++;
     this.recentFiles = [filename, ...this.recentFiles].slice(0, 5);
@@ -189,8 +202,8 @@ private async saveSegment(isManual = false): Promise<{ success: boolean; path?: 
 
     return {
       success: true,
-      path: savedFile.path || savedFile.id,
-      savedToChunk: !savedFile.path, // если нет пути, значит сохранили в память (чанк)
+      path: savedTrack.path || savedTrack.id,
+      savedToChunk: !savedTrack.path,
     };
   }
 
@@ -460,9 +473,12 @@ private async saveSegment(isManual = false): Promise<{ success: boolean; path?: 
   }
   
   private clearChunks(): void {
-    const bufferFiles = audioLibrary.getFilesByCollection('buffer');
-    bufferFiles.forEach(async (file) => {
-      await audioLibrary.deleteFile(file.id);
+    const bufferCollection = this.getBufferCollection();
+    const bufferTracks = bufferCollection
+      ? audioLibraryService.getTracksByCollection(bufferCollection.id)
+      : [];
+    bufferTracks.forEach(async (track) => {
+      await audioLibraryService.deleteTrack(track.id);
     });
     this.totalRecordings = 0;
     this.recentFiles = [];

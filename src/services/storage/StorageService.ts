@@ -4,6 +4,62 @@ import { AudioCollection, AudioTrack } from '../../types/audio';
 class StorageService {
   private readonly COLLECTIONS_KEY = 'audio_library_collections';
   private readonly TRACKS_KEY = 'audio_library_tracks';
+  private readonly BLOBS_DB_NAME = 'audio_library_blobs';
+  private readonly BLOBS_STORE_NAME = 'track_blobs';
+  private readonly BLOBS_DB_VERSION = 1;
+
+  private openBlobsDb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.BLOBS_DB_NAME, this.BLOBS_DB_VERSION);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(this.BLOBS_STORE_NAME)) {
+          db.createObjectStore(this.BLOBS_STORE_NAME);
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error('Failed to open IndexedDB'));
+    });
+  }
+
+  async saveTrackBlob(trackId: string, blob: Blob): Promise<void> {
+    const db = await this.openBlobsDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(this.BLOBS_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(this.BLOBS_STORE_NAME);
+      store.put(blob, trackId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('Failed to save blob'));
+    });
+    db.close();
+  }
+
+  async loadTrackBlob(trackId: string): Promise<Blob | null> {
+    const db = await this.openBlobsDb();
+    const blob = await new Promise<Blob | null>((resolve, reject) => {
+      const tx = db.transaction(this.BLOBS_STORE_NAME, 'readonly');
+      const store = tx.objectStore(this.BLOBS_STORE_NAME);
+      const request = store.get(trackId);
+      request.onsuccess = () => resolve((request.result as Blob | undefined) ?? null);
+      request.onerror = () => reject(request.error ?? new Error('Failed to load blob'));
+    });
+    db.close();
+    return blob;
+  }
+
+  async deleteTrackBlob(trackId: string): Promise<void> {
+    const db = await this.openBlobsDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(this.BLOBS_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(this.BLOBS_STORE_NAME);
+      store.delete(trackId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('Failed to delete blob'));
+    });
+    db.close();
+  }
 
   async saveCollections(collections: AudioCollection[]): Promise<void> {
     try {
@@ -35,7 +91,13 @@ class StorageService {
 
   async saveTracks(tracks: AudioTrack[]): Promise<void> {
     try {
-      const data = JSON.stringify(tracks);
+      const serializableTracks = tracks.map((track) => ({
+        ...track,
+        blob: undefined,
+        blobData: undefined,
+      }));
+
+      const data = JSON.stringify(serializableTracks);
       localStorage.setItem(this.TRACKS_KEY, data);
     } catch (error) {
       console.error('Failed to save tracks:', error);
@@ -51,8 +113,9 @@ class StorageService {
       const tracks = JSON.parse(data);
       return tracks.map((t: any) => ({
         ...t,
+        blob: undefined,
         createdAt: new Date(t.createdAt),
-        updatedAt: new Date(t.updatedAt)
+        updatedAt: new Date(t.updatedAt),
       }));
     } catch (error) {
       console.error('Failed to load tracks:', error);

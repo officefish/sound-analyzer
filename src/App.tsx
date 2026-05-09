@@ -11,6 +11,7 @@ const Microphone = lazy(() => import('./modules/Microphone'));
 const Library = lazy(() => import('./modules/Library'));
 const Player = lazy(() => import('./modules/Player'));
 const AlternateLibrary = lazy(() => import('./modules/AlternateLibrary'));
+const FileManager = lazy(() => import('./modules/FileManager'));
 
 
 // Маппинг компонентов
@@ -19,7 +20,8 @@ const moduleComponents: Record<ModuleType, React.ComponentType> = {
   library: Library,
   player: Player,
   journal: Journal,
-  altLibrary: AlternateLibrary
+  altLibrary: AlternateLibrary,
+  fileManager: FileManager,
 };
 
 // Обновляем MODULES с реальными компонентами
@@ -28,6 +30,7 @@ MODULES[1].component = Library;
 MODULES[2].component = Player;
 MODULES[3].component = Journal;
 MODULES[4].component = AlternateLibrary;
+MODULES[5].component = FileManager;
 
 const App: React.FC = () => {
   const { currentApp, activeModules, setCurrentApp } = useAppStore();

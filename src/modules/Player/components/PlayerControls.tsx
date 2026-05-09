@@ -1,6 +1,7 @@
 import React from 'react';
 
 interface PlayerControlsProps {
+  currentTrackName?: string;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -12,6 +13,7 @@ interface PlayerControlsProps {
 }
 
 const PlayerControls: React.FC<PlayerControlsProps> = ({
+  currentTrackName,
   isPlaying,
   currentTime,
   duration,
@@ -41,8 +43,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
         <div className="flex-1">
           <div className="text-sm text-base-content/50">Сейчас играет</div>
           <div className="font-medium text-base-content truncate">
-            {/* 🎵 {'currentTrack' || 'Нет трека'} */}
-            🎵 Track name
+            🎵 {currentTrackName || 'Нет трека'}
           </div>
         </div>
         <div className="flex items-center gap-2">
